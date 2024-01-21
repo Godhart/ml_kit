@@ -57,8 +57,8 @@ def safe_dict(value):
         return value
     else:
         return str(value)
-    
-    
+
+
 def safe_path(path):
     """Преобразует строку в безопасную для файловой системы
     """
