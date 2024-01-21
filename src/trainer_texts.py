@@ -75,7 +75,7 @@ class TrainTexts:
         self.classes    = classes
         self.train      = train
         self.test       = test
-        
+
     @property
     def classes_labels(self):
         return [item[1] for item in self.classes]
