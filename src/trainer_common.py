@@ -37,6 +37,7 @@ S_EXTERNAL = "_external_"
 S_REGULAR = "regular"
 S_BACKUP = "backup"
 S_BEST = "best"
+S_COMPLETE = "complete"
 
 
 class ModelContext:
@@ -531,26 +532,42 @@ class TrainHandler:
         os.makedirs(save_path)
         if self._mhd is not None:
             self._mhd.save(save_path)
+        with open(save_path / S_COMPLETE, "w") as f:
+            # Mark that save is complete
+            pass
 
     def is_saved(self, path=S_REGULAR):
         if path == S_REGULAR:
             load_path = self._last_path
+            back_path = self._back_path
         elif path == S_BEST:
             load_path = self._best_path
+            back_path = self._bbak_path
         else:
             raise ValueError(f"path should be one of {[S_REGULAR, S_BEST]}")
-        return load_path.exists()
+
+        if (load_path.exists() and (load_path / S_COMPLETE).exists()) \
+        or (back_path.exists() and (back_path / S_COMPLETE).exists()):
+            return True
+        return False
 
     def load(self, path=S_REGULAR, dont_load_model=False):
         if path == S_REGULAR:
             load_path = self._last_path
+            back_path = self._back_path
         elif path == S_BEST:
             load_path = self._best_path
+            back_path = self._bbak_path
         else:
             raise ValueError(f"path should be one of {[S_REGULAR, S_BEST]}")
 
-        if not load_path.exists():
-            raise FileNotFoundError(f"path '{load_path}' was not found")
+        if not load_path.exists() or not (load_path / S_COMPLETE).exists():
+            # If original path not exists or save is not complete
+            if back_path.exists() and (back_path / S_COMPLETE).exists():
+                # Try to load backup
+                load_path = back_path
+            else:
+                raise FileNotFoundError(f"path '{load_path}' was not found")
 
         if self._mhd is None:
             self._mhd = self._mhd_class(
