@@ -117,7 +117,7 @@ for k in models:
                 # По умолчанию заполнить текст вкладок информацией о параметрах модели
                 clear_output()
                 print(f"{k}--{hyper_params}")
-            
+
 tabs_objs = {k: widgets.Tab() for k in tabs_dict}
 for k, v in tabs_dict.items():
     sorted_tab_items_keys = list(sorted(v.keys(), key=lambda x: int(x)))
@@ -163,7 +163,7 @@ for hyper_params in hyper_params_sets:
         train_models = [
             tune_model(v, hyper_params),
         ]
-        
+
         def display_callback(message):
             for tab_id in hyper_params['tabs']:
                 tab_group, tab_i = tab_id.split(":")
@@ -178,14 +178,14 @@ for hyper_params in hyper_params_sets:
 
             "chunk_size"    : hyper_params['chunk_size'],
         }
-        
+
         results = text_train__all_together(
             train_data=text_train_data,
             models=train_models,
             variables=variables,
             display_callback=display_callback,
         )
-        
+
         # Вывод результатов для сравнения
         for tab_id in hyper_params['tabs']:
             tab_group, tab_i = tab_id.split(":")
