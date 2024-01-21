@@ -95,7 +95,7 @@ class ModelContext:
         return len(self._history["val_accuracy"])
 
     def _plot_images(self, plotter, plot_f, plot_hist_args):
-        plot_history = self.report_history or self.history 
+        plot_history = self.report_history or self.history
         if plot_history is not None:
             fig, (ax1, ax2) = plotter.subplots(1, 2, figsize=self._hist_figsize)
             fig.suptitle('График процесса обучения модели')
@@ -254,7 +254,7 @@ class ModelHandler():
     - remove complexity and unify models creation
     - provide unified way to save/load training context
     """
-    
+
     _context_class = ModelContext
     _metrics = ['accuracy']
 
@@ -391,7 +391,7 @@ class ModelHandler():
 
         if self._context.test_accuracy is None:
             self._context.test_accuracy = None # TODO:
-            
+
     def unload_model(self):
         self._model = None
 
@@ -468,7 +468,7 @@ class TrainHandler:
     - saves / loads best training result and last training result as well
     - saves intermediate training results so it's easy to continue when stopped for some reason
     """
-    
+
     def __init__(
         self,
         data_path   : Path | str,
@@ -698,7 +698,7 @@ if STANDALONE:
             },
             # TODO: train, validation, test data
         )
-                
+
         ###
         # Just Load and train
         thd = TrainHandler(
