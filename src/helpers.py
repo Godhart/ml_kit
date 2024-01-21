@@ -89,6 +89,15 @@ def report_from_dict(title: str, data: dict, template: str, fields: list[str]):
     return "\n".join(report)
 
 
+def chop_list_by_sliding_window(data, chunk_size, step):
+    """
+    Функция разбиения списка на отрезки скользящим окном
+    На входе - последовательность список, размер окна, шаг окна
+    """
+    # Последовательность разбивается на части до последнего полного окна
+    return [data[i:i + chunk_size] for i in range(0, len(data) - chunk_size + 1, step)]
+
+
 def layer_template(layer_kind, *args, **kwargs):
     return (layer_kind, args, kwargs)
 

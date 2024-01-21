@@ -40,6 +40,72 @@ S_BEST = "best"
 S_COMPLETE = "complete"
 
 
+class TrainDataProvider:
+    """
+    Класс для абстракции источников данных для обучения
+    Упрощает написание кода, позволяет избегать ошибок из-за путаницы имен
+    """
+
+    def __init__(self,x_train, y_train, x_val, y_val, x_test, y_test):
+        self.x_train = x_train
+        self.y_train = y_train
+        self.x_val   = x_val
+        self.y_val   = y_val
+        self.x_test  = x_test
+        self.y_test  = y_test
+
+    def all_as_tuple(self):
+        return self.x_train, self.y_train, self.x_val, self.y_val, self.x_test, self.y_test
+
+    def train_val_as_tuple(self):
+        return self.x_train, self.y_train, self.x_val, self.y_val
+
+    def train_as_tuple(self):
+        return self.x_train, self.y_train
+
+    def val_as_tuple(self):
+        return self.x_val, self.y_val
+
+    def test_as_tuple(self):
+        return self.x_test, self.y_test
+
+    def all_as_dict(self):
+        return {
+            "x_train"   : self.x_train,
+            "y_train"   : self.y_train,
+            "x_val"     : self.x_val,
+            "y_val"     : self.y_val,
+            "x_test"    : self.x_test,
+            "y_test"    : self.y_test,
+        }
+
+    def train_val_as_dict(self):
+        return {
+            "x_train"   : self.x_train,
+            "y_train"   : self.y_train,
+            "x_val"     : self.x_val,
+            "y_val"     : self.y_val,
+        }
+
+    def train_as_dict(self):
+        return {
+            "x_train"   : self.x_train,
+            "y_train"   : self.y_train,
+        }
+
+    def val_as_dict(self):
+        return {
+            "x_val"     : self.x_val,
+            "y_val"     : self.y_val,
+        }
+
+    def test_as_dict(self):
+        return {
+            "x_test"    : self.x_test,
+            "y_test"    : self.y_test,
+        }
+
+
 class ModelContext:
     """
     Holds basic model training context that is lightweight to dump with pickle

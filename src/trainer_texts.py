@@ -214,15 +214,6 @@ def texts_stats(texts, classes, tokens=None):
     return result
 
 
-def chop_list_by_sliding_window(data, chunk_size, step):
-    """
-    Функция разбиения списка на отрезки скользящим окном
-    На входе - последовательность список, размер окна, шаг окна
-    """
-    # Последовательность разбивается на части до последнего полного окна
-    return [data[i:i + chunk_size] for i in range(0, len(data) - chunk_size + 1, step)]
-
-
 def prepare_long_texts(texts, classes, chunk_size, chunks_step):
     """
     Функция подготовки длинных текстов в данные для обучения
@@ -254,71 +245,6 @@ def prepare_long_texts(texts, classes, chunk_size, chunks_step):
     # Возврат результатов как numpy-массивов
     return np.array(x), np.array(y)
 
-
-class TrainDataProvider:
-    """
-    Класс для абстракции источников данных для обучения
-    Упрощает написание кода, позволяет избегать ошибок из-за путаницы имен
-    """
-
-    def __init__(self,x_train, y_train, x_val, y_val, x_test, y_test):
-        self.x_train = x_train
-        self.y_train = y_train
-        self.x_val   = x_val
-        self.y_val   = y_val
-        self.x_test  = x_test
-        self.y_test  = y_test
-
-    def all_as_tuple(self):
-        return self.x_train, self.y_train, self.x_val, self.y_val, self.x_test, self.y_test
-
-    def train_val_as_tuple(self):
-        return self.x_train, self.y_train, self.x_val, self.y_val
-
-    def train_as_tuple(self):
-        return self.x_train, self.y_train
-
-    def val_as_tuple(self):
-        return self.x_val, self.y_val
-
-    def test_as_tuple(self):
-        return self.x_test, self.y_test
-
-    def all_as_dict(self):
-        return {
-            "x_train"   : self.x_train,
-            "y_train"   : self.y_train,
-            "x_val"     : self.x_val,
-            "y_val"     : self.y_val,
-            "x_test"    : self.x_test,
-            "y_test"    : self.y_test,
-        }
-
-    def train_val_as_dict(self):
-        return {
-            "x_train"   : self.x_train,
-            "y_train"   : self.y_train,
-            "x_val"     : self.x_val,
-            "y_val"     : self.y_val,
-        }
-
-    def train_as_dict(self):
-        return {
-            "x_train"   : self.x_train,
-            "y_train"   : self.y_train,
-        }
-
-    def val_as_dict(self):
-        return {
-            "x_val"     : self.x_val,
-            "y_val"     : self.y_val,
-        }
-
-    def test_as_dict(self):
-        return {
-            "x_test"    : self.x_test,
-            "y_test"    : self.y_test,
-        }
 
 class TextTrainDataProvider(TrainDataProvider):
     """
