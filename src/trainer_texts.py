@@ -7,6 +7,7 @@ except ImportError:
     STANDALONE = False
 
 if STANDALONE:
+    from env import *
     from helpers import *
     from trainer_common import *
 
@@ -490,5 +491,5 @@ if STANDALONE:
             chunk_size,
             chunk_step,
             bow_used=BOW_USED,
-            debug=DEBUG_PRINT,
+            debug=ENV[ENV__DEBUG_PRINT],
         )
