@@ -84,7 +84,7 @@ def safe_dict(value):
 def safe_path(path):
     """Преобразует строку в безопасную для файловой системы
     """
-    return re.subn(r"[^\w -]", "_", path)[0]
+    return re.subn(r"[^\w .-]", "_", path)[0]
 
 
 def report_from_dict(title: str, data: dict, template: str, fields: list[str]):
