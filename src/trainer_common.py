@@ -116,7 +116,7 @@ class ModelContext:
     Saves general data in YAML format as well so it easy to view and recover in case if pickle fails
     """
 
-    _hist_figsize           = (20, 5)
+    _hist_figsize           = (16, 3)
 
     def __init__(
         self,
@@ -231,9 +231,9 @@ class ClassClassifierContext(ModelContext):
     ModelContext extended to Class Classification task
     """
 
-    _cm_figsize             = (10, 10)
-    _cm_title_fontsize      = 18
-    _cm_fontsize            = 16
+    _cm_figsize             = (5, 5)
+    _cm_title_fontsize      = 14
+    _cm_fontsize            = 12
 
     def __init__(
         self,
