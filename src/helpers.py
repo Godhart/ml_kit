@@ -7,14 +7,14 @@ except ImportError:
     STANDALONE = False
 
 if STANDALONE:
-    pass
+    from env import *
 
 import copy
 import time
 import re
 
-DEBUG_PRINT = True
-AUTOIMPORT = False
+ENV__CREATE_MODEL__AUTOIMPORT = 'autoimport'
+ENV[ENV__CREATE_MODEL__AUTOIMPORT] = False
 
 S_CHAIN = 'chain'
 S_INPUT = 'input'
@@ -46,7 +46,7 @@ class timex:
 
     def __exit__(self, type, value, traceback):
         # Вывод времени работы
-        if DEBUG_PRINT:
+        if ENV[ENV__DEBUG_PRINT]:
             print('{} занял{}: {:.2f} с'.format(self._task_name, self._task_suffix, time.time() - self.t))
 
 
@@ -205,7 +205,7 @@ def layer_create(layer_template_data, **variables):
             if v[1:] in variables:
                 kwargs[k] = variables[v[1:]]
     if isinstance(layer_kind, str) and layer_kind[:1]=="<" and layer_kind[:-1]==">":
-        if AUTOIMPORT:
+        if ENV[ENV__CREATE_MODEL__AUTOIMPORT]:
             pass # TODO: try to import according to str # NOTE: it's really unsafe but can be used with YAML
         else:
             raise ValueError("'layer_kind' should be a class!")
