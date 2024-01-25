@@ -12,7 +12,7 @@ if STANDALONE:
     from trainer_texts import *
 
 # Класс для конструирования последовательной модели нейронной сети
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Model
 
 # Основные слои
 from tensorflow.keras.layers import Dense, Dropout, SpatialDropout1D, BatchNormalization, Embedding, Flatten, Activation
@@ -68,11 +68,11 @@ else:
     texts = TrainTexts(CLASS_LIST, text_train, text_test)
 
 # Шаблоны моделей для обучения
-models = {
-    "conv1": {
-        "name":     "conv1",
-        "class":    Sequential,
-        "template": [
+models = to_dict(
+    conv1 = to_dict(
+        name            = "conv1",
+        model_class     = Model,
+        template        = [
             # Список слоев и их параметров
             layer_template(Embedding,           '$vocab_size', 10, input_length='$chunk_size'),
             layer_template(SpatialDropout1D,    0.2),
@@ -87,16 +87,16 @@ models = {
             layer_template(Flatten,),
             layer_template(Dense,               '$classes_count', activation='softmax'),
         ]
-    }
-}
+    )
+)
 
 hyper_params_sets = (
-    {"vocab_size": 20_000, "chunk_size": 1_000, "chunk_step": 100, "tabs": ["vs:20000","cs:1000"]},
-    {"vocab_size":  5_000, "chunk_size": 1_000, "chunk_step": 100, "tabs": ["vs:5000"]},
-    {"vocab_size": 10_000, "chunk_size": 1_000, "chunk_step": 100, "tabs": ["vs:10000"]},
-    {"vocab_size": 40_000, "chunk_size": 1_000, "chunk_step": 100, "tabs": ["vs:40000"]},
-    {"vocab_size": 20_000, "chunk_size":   500, "chunk_step":  50, "tabs": ["cs:500"]},
-    {"vocab_size": 20_000, "chunk_size": 2_000, "chunk_step": 200, "tabs": ["cs:2000"]},
+    to_dict(v=to_dict(vocab_size = 20_000, chunk_size = 1_000, chunk_step = 100,), tabs=["vs:20000","cs:1000"]),
+    to_dict(v=to_dict(vocab_size =  5_000, chunk_size = 1_000, chunk_step = 100,), tabs=["vs:5000"]),
+    to_dict(v=to_dict(vocab_size = 10_000, chunk_size = 1_000, chunk_step = 100,), tabs=["vs:10000"]),
+    to_dict(v=to_dict(vocab_size = 40_000, chunk_size = 1_000, chunk_step = 100,), tabs=["vs:40000"]),
+    to_dict(v=to_dict(vocab_size = 20_000, chunk_size =   500, chunk_step =  50,), tabs=["cs:500"]),
+    to_dict(v=to_dict(vocab_size = 20_000, chunk_size = 2_000, chunk_step = 200,), tabs=["cs:2000"]),
 )
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -149,13 +149,13 @@ for hyper_params in hyper_params_sets:
         texts,
         bow_used=ENV[ENV__TEXTS__BOW_USED],
         debug=ENV[ENV__DEBUG_PRINT],
-        **hyper_params,
+        **hyper_params['v'],
     )
 
     # Функция, которая донастраивает модели из шаблона под текущие параметры
     def tune_model(model, hyper_params):
         tuned_model = copy.deepcopy(model)
-        tuned_model['name'] += f"--vocab_{hyper_params['vocab_size']}--chunk_{hyper_params['chunk_size']}_{hyper_params['chunk_step']}"
+        tuned_model['name'] += f"--vocab_{hyper_params['v']['vocab_size']}--chunk_{hyper_params['v']['chunk_size']}_{hyper_params['v']['chunk_step']}"
         return tuned_model
 
     # Обучить модели под текущие параметры
@@ -174,12 +174,12 @@ for hyper_params in hyper_params_sets:
                     # Вывести во вкладку информацию об обучении
                     print(message)
 
-        variables = {
-            "classes_count" : len(text_train_data.classes),
-            "vocab_size"    : text_train_data.vocab_size,
+        variables = to_dict(
+            classes_count   = len(text_train_data.classes),
+            vocab_size      = text_train_data.vocab_size,
 
-            "chunk_size"    : hyper_params['chunk_size'],
-        }
+            chunk_size      = hyper_params['v']['chunk_size'],
+        )
 
         results = text_train__all_together(
             train_data=text_train_data,
