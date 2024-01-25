@@ -135,6 +135,7 @@ class ModelContext:
         model_class         : None,
         optimizer           : None,
         loss                : None,
+        metrics             : list,
         model_template      : list | None = None,
         model_variables     : dict | None = None,
         history             = None,
@@ -146,6 +147,7 @@ class ModelContext:
         self.model_class    = model_class
         self.optimizer      = optimizer
         self.loss           = loss
+        self.metrics        = metrics
         self.model_template = model_template
         self.model_variables = model_variables
         self.history        = history
@@ -223,16 +225,15 @@ class ModelContext:
             "optimizer"     : safe_dict(self.optimizer),
             "epoch"         : safe_dict(self.epoch),
             "loss"          : safe_dict(self.loss),
+            "metrics"       : safe_dict(self.metrics),
         }
-        for metric in METRICS:
-            if metric not in self._history:
-                continue
+        for metric in self.metrics:
             if hasattr(self, metric):
-                with open(path / f"train_{metric}-{getattr(self, metric)}", "w") as f:
+                with open(path / safe_path(f"val_{metric}-{getattr(self, metric)}", "w")) as f:
                     pass
-                dump_data[metric] = getattr(self, metric)
+                dump_data['val_'+metric] = getattr(self, metric)
             if hasattr(self, 'test_'+metric):
-                with open(path / f"test_{metric}-{getattr(self, 'test_'+metric)}", "w") as f:
+                with open(path / safe_path(f"test_{metric}-{getattr(self, 'test_'+metric)}"), "w") as f:
                     pass
                 dump_data['test_'+metric] = getattr(self, 'test_'+metric)
         dump_data = {
@@ -257,7 +258,7 @@ class ModelContext:
             if metric not in self._history:
                 continue
             if hasattr(self, metric):
-                print(f"{metric} = {getattr(self, metric)}")
+                print(f"'val_'+{metric} = {getattr(self, metric)}")
             if hasattr(self, 'test_'+metric):
                 print(f"test_{metric} = {getattr(self, 'test_'+metric)}")
         self._plot_images(plt, plt.show, [], [])
@@ -360,7 +361,6 @@ class ModelHandler():
     """
 
     _context_class = ModelContext
-    _metrics = ['accuracy']
 
     def __init__(
         self,
@@ -368,6 +368,7 @@ class ModelHandler():
         model_class,
         optimizer,
         loss,
+        metrics         : list | None = None,
         model_template  : list = None,
         model_variables : dict | None = None,
         batch_size      : int = 10,
@@ -375,11 +376,14 @@ class ModelHandler():
         x_val   = None, y_val   = None,
         x_test  = None, y_test  = None,
     ):
+        if metrics is None:
+            metrics = [S_ACCURACY]
         self._context = self._context_class(
             name            = name,
             model_class     = model_class,
             optimizer       = optimizer,
             loss            = loss,
+            metrics         = metrics,
         )
         self.model_template  = model_template
         self.model_variables = model_variables
@@ -438,14 +442,14 @@ class ModelHandler():
 
     @property
     def metrics(self):
-        return self._metrics
+        return self._context.metrics
 
     @metrics.setter
     def metrics(self, value):
         for v in value:
             if v not in METRICS:
                 raise ValueError(f"Unknown metric {v}!")
-        self._metrics = value
+        self._context.metrics = value
 
     @property
     def history(self):
@@ -472,7 +476,7 @@ class ModelHandler():
         self._model.compile(
             optimizer=self.context.optimizer,
             loss=self.context.loss,
-            metrics=self._metrics
+            metrics=self.context.metrics,
         )
 
     def fit(self, epochs):
@@ -483,9 +487,9 @@ class ModelHandler():
             validation_data=(self.x_val, self.y_val),
         ).history
         self._context.test_pred = None
-        for m in self._metrics:
-            if hasattr(self, 'test_'+m):
-                setattr(self, 'test_'+m, None)
+        for m in self._context.metrics:
+            if hasattr(self._context, 'test_'+m):
+                setattr(self._context, 'test_'+m, None)
         return self.history
 
     def predict(self, data):
@@ -509,10 +513,10 @@ class ModelHandler():
         if self._context.test_pred is None:
             self._context.test_pred  = self.predict(self.x_test)
 
-        for m in self._metrics:
+        for m in self._context.metrics:
             if hasattr(self, 'test_'+m):
-                if getattr(self, 'test_'+m) is None:
-                    setattr(self, 'test_'+m, None) # TODO:
+                if getattr(self._context, 'test_'+m) is None:
+                    setattr(self._context, 'test_'+m, None) # TODO:
 
     def unload_model(self):
         self._model = None
