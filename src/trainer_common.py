@@ -425,9 +425,7 @@ class ModelHandler():
         model_template  : list = None,
         model_variables : dict | None = None,
         batch_size      : int = 10,
-        x_train = None, y_train = None,
-        x_val   = None, y_val   = None,
-        x_test  = None, y_test  = None,
+        data_provider   : TrainDataProvider = None,
     ):
         if metrics is None:
             metrics = [S_ACCURACY]
@@ -443,9 +441,7 @@ class ModelHandler():
         self.batch_size      = batch_size
         self._model          = None
         self._inputs_order   = None
-        self.x_train, self.y_train = x_train, y_train
-        self.x_val,   self.y_val   = x_val,   y_val
-        self.x_test,  self.y_test  = x_test,  y_test
+        self.data_provider   = data_provider
 
     @property
     def context(self):
@@ -534,10 +530,10 @@ class ModelHandler():
 
     def fit(self, epochs):
         self.history = self.model.fit(
-            self.x_train, self.y_train,
+            self.data_provider.x_train, self.data_provider.y_train,
             batch_size=self.batch_size,
             epochs=epochs,
-            validation_data=(self.x_val, self.y_val),
+            validation_data=(self.data_provider.x_val, self.data_provider.y_val),
         ).history
         self._context.test_pred = None
         for m in self._context.metrics:
@@ -592,9 +588,7 @@ class ClassClassifierHandler(ModelHandler):
         model_template  : list = None,
         model_variables : dict | None = None,
         batch_size      : int = 10,
-        x_train = None, y_train = None,
-        x_val   = None, y_val   = None,
-        x_test  = None, y_test  = None,
+        data_provider   : TrainDataProvider = None,
         class_labels    : list[str] = None,
     ):
         super(ClassClassifierHandler, self).__init__(
@@ -605,9 +599,7 @@ class ClassClassifierHandler(ModelHandler):
             model_template,
             model_variables,
             batch_size,
-            x_train,    y_train,
-            x_val,      y_val,
-            x_test,     y_test,
+            data_provider,
         )
         self.class_labels    = class_labels
 
