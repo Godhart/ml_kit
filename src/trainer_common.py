@@ -57,63 +57,117 @@ class TrainDataProvider:
     Упрощает написание кода, позволяет избегать ошибок из-за путаницы имен
     """
 
-    def __init__(self,x_train, y_train, x_val, y_val, x_test, y_test):
-        self.x_train = x_train
-        self.y_train = y_train
-        self.x_val   = x_val
-        self.y_val   = y_val
-        self.x_test  = x_test
-        self.y_test  = y_test
+    def __init__(self,x_train, y_train, x_val, y_val, x_test, y_test, order=None):
+        self._x_train = x_train
+        self._y_train = y_train
+        self._x_val   = x_val
+        self._y_val   = y_val
+        self._x_test  = x_test
+        self._y_test  = y_test
+        self.order    = order
+        
+    def _o(self, data, order):
+        order = order or self.order
+        if order is None:
+            return data
+        if not isinstance(data, (dict, list, tuple)):
+            raise ValueError("Ordered output only available for data organized as dict, list or tuple")
+        return [data[k] for k in order]
+    
+    @property
+    def x_train(self):
+        return self._o(self._x_train)
 
-    def all_as_tuple(self):
-        return self.x_train, self.y_train, self.x_val, self.y_val, self.x_test, self.y_test
+    @property
+    def y_train(self):
+        return self._o(self._y_train)
 
-    def train_val_as_tuple(self):
-        return self.x_train, self.y_train, self.x_val, self.y_val
+    @property
+    def x_val(self):
+        return self._o(self._x_val)
 
-    def train_as_tuple(self):
-        return self.x_train, self.y_train
+    @property
+    def y_val(self):
+        return self._o(self._x_val)
 
-    def val_as_tuple(self):
-        return self.x_val, self.y_val
+    @property
+    def x_test(self):
+        return self._o(self._x_test)
 
-    def test_as_tuple(self):
-        return self.x_test, self.y_test
+    @property
+    def y_test(self):
+        return self._o(self._y_test)
 
-    def all_as_dict(self):
+    def all_as_tuple(self, order=None):
+        return (
+            self._o(self.x_train, order),
+            self._o(self.y_train, order),
+            self._o(self.x_val  , order),
+            self._o(self.y_val  , order),
+            self._o(self.x_test , order),
+            self._o(self.y_test , order),
+        )
+
+    def train_val_as_tuple(self, order=None):
+        return (
+            self._o(self.x_train, order),
+            self._o(self.y_train, order),
+            self._o(self.x_val  , order),
+            self._o(self.y_val  , order),
+        )
+
+    def train_as_tuple(self, order=None):
+        return (
+            self._o(self.x_train, order),
+            self._o(self.y_train, order),
+        )
+
+    def val_as_tuple(self, order=None):
+        return (
+            self._o(self.x_val, order),
+            self._o(self.y_val, order),
+        )
+
+    def test_as_tuple(self, order=None):
+        return (
+            self._o(self.x_test, order),
+            self._o(self.y_test, order),
+        )
+
+    def all_as_dict(self, order=None):
         return {
-            "x_train"   : self.x_train,
-            "y_train"   : self.y_train,
-            "x_val"     : self.x_val,
-            "y_val"     : self.y_val,
-            "x_test"    : self.x_test,
-            "y_test"    : self.y_test,
+            "x_train"   : self._o(self.x_train, order),
+            "y_train"   : self._o(self.y_train, order),
+            "x_val"     : self._o(self.x_val  , order),
+            "y_val"     : self._o(self.y_val  , order),
+            "x_test"    : self._o(self.x_test , order),
+            "y_test"    : self._o(self.y_test , order),
         }
 
-    def train_val_as_dict(self):
+    def train_val_as_dict(self, order=None):
         return {
-            "x_train"   : self.x_train,
-            "y_train"   : self.y_train,
-            "x_val"     : self.x_val,
-            "y_val"     : self.y_val,
+            "x_train"   : self._o(self.x_train, order),
+            "y_train"   : self._o(self.y_train, order),
+            "x_val"     : self._o(self.x_val  , order),
+            "y_val"     : self._o(self.y_val  , order),
         }
 
-    def train_as_dict(self):
+    def train_as_dict(self, order=None):
         return {
-            "x_train"   : self.x_train,
-            "y_train"   : self.y_train,
+            "x_train"   : self._o(self.x_train, order),
+            "y_train"   : self._o(self.y_train, order),
         }
 
-    def val_as_dict(self):
+    def val_as_dict(self, order=None):
         return {
-            "x_val"     : self.x_val,
-            "y_val"     : self.y_val,
+            "x_val"     : self._o(self.x_val  , order),
+            "y_val"     : self._o(self.y_val  , order),
         }
 
-    def test_as_dict(self):
+    def test_as_dict(self, order=None):
         return {
-            "x_test"    : self.x_test,
-            "y_test"    : self.y_test,
+            "x_test"    : self._o(self.x_test , order),
+            "y_test"    : self._o(self.y_test , order),
         }
 
 
