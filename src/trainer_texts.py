@@ -467,7 +467,7 @@ def text_train__all_together(
     for model_data in models:
         mhd = ClassClassifierHandler(
             name            = model_data['name'],
-            model_class     = model_data['class'],
+            model_class     = model_data['model_class'],
             optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
             loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
             model_template  = model_data['template'],
