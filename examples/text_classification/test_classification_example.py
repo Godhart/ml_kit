@@ -20,6 +20,7 @@ from tensorflow.keras.layers import SimpleRNN, GRU, LSTM, Bidirectional, Conv1D,
 
 ###
 
+ENV[ENV__DEBUG_PRINT] = True
 DEBUG_PRINT = True
 
 ###
@@ -147,7 +148,7 @@ for hyper_params in hyper_params_sets:
     text_train_data = TextTrainDataProvider(
         texts,
         bow_used=BOW_USED,
-        debug=DEBUG_PRINT,
+        debug=ENV[ENV__DEBUG_PRINT],
         **hyper_params,
     )
 
