@@ -40,6 +40,17 @@ S_BACKUP = "backup"
 S_BEST = "best"
 S_COMPLETE = "complete"
 
+S_ACCURACY = "accuracy"
+S_MAE = "mae"
+S_LOSS = "loss"
+
+METRICS = [S_ACCURACY, S_MAE, ]
+METRICS_T = {
+    S_ACCURACY  : "доля верных ответов",
+    S_MAE       : "средняя абсолютная ошибка",
+    S_LOSS      : "ошибка",
+}
+
 
 class TrainDataProvider:
     """
@@ -116,7 +127,7 @@ class ModelContext:
     Saves general data in YAML format as well so it easy to view and recover in case if pickle fails
     """
 
-    _hist_figsize           = (16, 3)
+    _hist_figsize           = (8, 3)
 
     def __init__(
         self,
@@ -129,6 +140,7 @@ class ModelContext:
         history             = None,
         test_pred           = None,
         test_accuracy       : float | None = None,
+        test_mae            : float | None = None,
     ):
         self.name           = name
         self.model_class    = model_class
@@ -140,6 +152,7 @@ class ModelContext:
         self.report_history = None
         self.test_pred      = test_pred
         self.test_accuracy  = test_accuracy
+        self.test_mae       = test_mae
 
     @property
     def history(self):
@@ -153,36 +166,42 @@ class ModelContext:
     def accuracy(self):
         if self._history is None:
             return 0.0
-        return self._history["val_accuracy"][-1]
+        return self._history.get("val_accuracy", [0.0])[-1]
+
+    @property
+    def mae(self):
+        if self._history is None:
+            return 2**31-1
+        return self._history.get("val_mae", [2**31-1])[-1]
 
     @property
     def epoch(self):
         if self._history is None:
             return 0
-        return len(self._history["val_accuracy"])
+        return max([len(self._history.get(metric, []) for metric in METRICS)])
 
     def _plot_images(self, plotter, plot_f, plot_hist_args):
         plot_history = self.report_history or self.history
         if plot_history is not None:
-            fig, (ax1, ax2) = plotter.subplots(1, 2, figsize=self._hist_figsize)
+            print_metrics = [S_LOSS] + [m for m in METRICS if m in plot_history]
+            cols = 2
+            rows = (print_metrics+cols-1) // cols
+            figsize = (self._hist_figsize[0]*cols, self._hist_figsize[1]*rows)
+            fig, subplots = plotter.subplots(rows, cols, figsize=figsize)
             fig.suptitle('График процесса обучения модели')
-            ax1.plot(plot_history['accuracy'],
-                    label='Доля верных ответов на обучающем наборе')
-            ax1.plot(plot_history['val_accuracy'],
-                    label='Доля верных ответов на проверочном наборе')
-            ax1.xaxis.get_major_locator().set_params(integer=True)
-            ax1.set_xlabel('Эпоха обучения')
-            ax1.set_ylabel('Доля верных ответов')
-            ax1.legend()
-
-            ax2.plot(plot_history['loss'],
-                    label='Ошибка на обучающем наборе')
-            ax2.plot(plot_history['val_loss'],
-                    label='Ошибка на проверочном наборе')
-            ax2.xaxis.get_major_locator().set_params(integer=True)
-            ax2.set_xlabel('Эпоха обучения')
-            ax2.set_ylabel('Ошибка')
-            ax2.legend()
+            subplot_i = 0
+            for metric in print_metrics:
+                subplot = subplots[subplot_i]
+                subplot_i += 1
+                metric_t = METRICS_T.get(metric, metric).capitalize()
+                subplot.plot(plot_history[metric],
+                        label=metric_t + ' на обучающем наборе')
+                subplot.plot(plot_history['val_'+metric],
+                        label=metric_t + ' на проверочном наборе')
+                subplot.xaxis.get_major_locator().set_params(integer=True)
+                subplot.set_xlabel('Эпоха обучения')
+                subplot.set_ylabel(metric_t)
+                subplot.legend()
             plot_f(*plot_hist_args)
 
     def short_report(self):
@@ -198,23 +217,35 @@ class ModelContext:
             extra_model_data = {}
         with open(path / f"epoch-{self.epoch}", "w") as f:
             pass
-        with open(path / f"train_accuracy-{self.accuracy}", "w") as f:
-            pass
-        with open(path / f"test_accuracy-{self.test_accuracy}", "w") as f:
-            pass
+        dump_data = {
+            "name"          : safe_dict(self.name),
+            "model_class"   : safe_dict(self.model_class),
+            "optimizer"     : safe_dict(self.optimizer),
+            "epoch"         : safe_dict(self.epoch),
+            "loss"          : safe_dict(self.loss),
+        }
+        for metric in METRICS:
+            if metric not in self._history:
+                continue
+            if hasattr(self, metric):
+                with open(path / f"train_{metric}-{getattr(self, metric)}", "w") as f:
+                    pass
+                dump_data[metric] = getattr(self, metric)
+            if hasattr(self, 'test_'+metric):
+                with open(path / f"test_{metric}-{getattr(self, 'test_'+metric)}", "w") as f:
+                    pass
+                dump_data['test_'+metric] = getattr(self, 'test_'+metric)
+        dump_data = {
+            **dump_data,
+            **{
+                "model_template": safe_dict(self.model_template),
+                "model_variable": safe_dict(self.model_variables),
+                "history"       : safe_dict(self.history),
+                                **safe_dict(extra_model_data),
+            }
+        }
         with open(path / "model.yaml", "w") as f:
-            yaml.safe_dump(
-                {
-                    "name"          : safe_dict(self.name),
-                    "model_class"   : safe_dict(self.model_class),
-                    "optimizer"     : safe_dict(self.optimizer),
-                    "loss"          : safe_dict(self.loss),
-                    "model_template": safe_dict(self.model_template),
-                    "model_variable": safe_dict(self.model_variables),
-                    "history"       : safe_dict(self.history),
-                                    **safe_dict(extra_model_data),
-                },
-                f,allow_unicode=True)
+            yaml.safe_dump(dump_data, f,allow_unicode=True)
         with open(path / "report.txt", "w") as f:
             f.write(self.short_report())
         self._plot_images(plt, plt.savefig, [path / "history.png"], [path / "cm.png"])
@@ -222,7 +253,13 @@ class ModelContext:
     def report_to_screen(self):
         print(self.short_report())
         print(f"train epoch={self.epoch}")
-        print(f"train accuracy={self.accuracy}")
+        for metric in METRICS:
+            if metric not in self._history:
+                continue
+            if hasattr(self, metric):
+                print(f"{metric} = {getattr(self, metric)}")
+            if hasattr(self, 'test_'+metric):
+                print(f"test_{metric} = {getattr(self, 'test_'+metric)}")
         self._plot_images(plt, plt.show, [], [])
 
 
@@ -346,8 +383,9 @@ class ModelHandler():
         )
         self.model_template  = model_template
         self.model_variables = model_variables
-        self.batch_size = batch_size
-        self._model = None
+        self.batch_size      = batch_size
+        self._model          = None
+        self._inputs_order   = None
         self.x_train, self.y_train = x_train, y_train
         self.x_val,   self.y_val   = x_val,   y_val
         self.x_test,  self.y_test  = x_test,  y_test
@@ -399,6 +437,17 @@ class ModelHandler():
         return self._model
 
     @property
+    def metrics(self):
+        return self._metrics
+
+    @metrics.setter
+    def metrics(self, value):
+        for v in value:
+            if v not in METRICS:
+                raise ValueError(f"Unknown metric {v}!")
+        self._metrics = value
+
+    @property
     def history(self):
         return self._context.history
 
@@ -432,7 +481,9 @@ class ModelHandler():
             validation_data=(self.x_val, self.y_val),
         ).history
         self._context.test_pred = None
-        self._context.test_accuracy = None
+        for m in self._metrics:
+            if hasattr(self, 'test_'+m):
+                setattr(self, 'test_'+m, None)
         return self.history
 
     def predict(self, data):
@@ -456,8 +507,10 @@ class ModelHandler():
         if self._context.test_pred is None:
             self._context.test_pred  = self.predict(self.x_test)
 
-        if self._context.test_accuracy is None:
-            self._context.test_accuracy = None # TODO:
+        for m in self._metrics:
+            if hasattr(self, 'test_'+m):
+                if getattr(self, 'test_'+m) is None:
+                    setattr(self, 'test_'+m, None) # TODO:
 
     def unload_model(self):
         self._model = None
