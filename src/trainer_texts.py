@@ -1,14 +1,14 @@
 ###
 # Text Trainer functions
 
-
 try:
-    # If running as standalone - need to import some in following manner
+    from standalone import STANDALONE
+except ImportError:
+    STANDALONE = False
+
+if STANDALONE:
     from helpers import *
     from trainer_common import *
-    STANDALONE = True
-except Exception as e:
-    STANDALONE = False
 
 ###
 # TODO: redefine in main section as necessary
@@ -481,13 +481,14 @@ def text_train__all_together(
 
 ###
 # Usage example
-if False:
-    texts = load_texts_from_dir(TRAIN_TEXTS_PATH, TRAIN_TEXTS_NAME_REGEX, TRAIN_TEXTS_SUBSETS)
-    text_train_data = TextTrainDataProvider(
-        texts,
-        vocab_size,
-        chunk_size,
-        chunk_step,
-        bow_used=BOW_USED,
-        debug=DEBUG_PRINT,
-    )
+if STANDALONE:
+    if False and __name__ == "__main__":
+        texts = load_texts_from_dir(TRAIN_TEXTS_PATH, TRAIN_TEXTS_NAME_REGEX, TRAIN_TEXTS_SUBSETS)
+        text_train_data = TextTrainDataProvider(
+            texts,
+            vocab_size,
+            chunk_size,
+            chunk_step,
+            bow_used=BOW_USED,
+            debug=DEBUG_PRINT,
+        )
