@@ -2,13 +2,14 @@
 # Решение задачи
 
 try:
-    # Подгрузка функций / классов если выполняется не в ноутбуке
+    from standalone import STANDALONE
+except ImportError:
+    STANDALONE = False
+
+if STANDALONE:
     from helpers import *
     from trainer_common import *
     from trainer_texts import *
-    STANDALONE = True
-except Exception as e:
-    STANDALONE = False
 
 # Класс для конструирования последовательной модели нейронной сети
 from tensorflow.keras.models import Sequential
