@@ -1,6 +1,15 @@
 ################################################################################
 # General helper functions / classes
 
+try:
+    from standalone import STANDALONE
+except ImportError:
+    STANDALONE = False
+
+if STANDALONE:
+    pass
+
+import copy
 import time
 import re
 
