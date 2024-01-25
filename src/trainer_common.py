@@ -7,6 +7,7 @@ except ImportError:
     STANDALONE = False
 
 if STANDALONE:
+    from env import *
     from helpers import *
 
 from pathlib import Path
@@ -23,17 +24,15 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
 ###
-ENV = {}
-S_MODELS_ROOT = "drive_root"
-ENV[S_MODELS_ROOT] = Path("~/ai-learn")
+ENV__MODELS_ROOT = "drive_root"
+ENV[ENV__MODELS_ROOT] = Path("~/ai-learn")
 
 def connect_gdrive():
     from google.colab import drive
     drive.mount("/content/drive/")
-    ENV[S_MODELS_ROOT] = Path("/content/drive/MyDrive/ai-learn")
+    ENV[ENV__MODELS_ROOT] = Path("/content/drive/MyDrive/ai-learn")
 ###
 
-S_MODELS_ROOT = "drive_root"
 S_EXTERNAL = "_external_"
 S_REGULAR = "regular"
 S_BACKUP = "backup"
@@ -828,7 +827,7 @@ if STANDALONE:
         ###
         # Just Load and train
         thd = TrainHandler(
-            data_path = ENV[S_MODELS_ROOT] / "some_additional_path",
+            data_path = ENV[ENV__MODELS_ROOT] / "some_additional_path",
             data_name = "some_specific_name",
             mhd = mhd
         )
@@ -845,7 +844,7 @@ if STANDALONE:
         ###
         # Load and eval
         thd = TrainHandler(
-            data_path = ENV[S_MODELS_ROOT] / "some_additional_path",
+            data_path = ENV[ENV__MODELS_ROOT] / "some_additional_path",
             data_name = "some_specific_name",
         )
         thd.load_best()
