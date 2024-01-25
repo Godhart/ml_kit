@@ -272,7 +272,7 @@ class TextTrainDataProvider(TrainDataProvider):
 
     def __init__(
         self, texts:TrainTexts, vocab_size:int, chunk_size:int, chunk_step:int, bow_used:bool=False, debug:bool=False,
-        **ignored_args
+        order = None,
     ):
         self._texts = texts
         self._vocab_size = vocab_size
@@ -280,7 +280,18 @@ class TextTrainDataProvider(TrainDataProvider):
         self._chunk_step = chunk_step
         self._bow_used = bow_used
         self._debug = debug
+        self.order = order
         self._prepare()
+        
+    @property
+    def order(self):
+        return self._order
+    
+    @order.setter()
+    def order(self, value):
+        if value is not None:
+            raise ValueError("'order' other than None is not supported by TextTrainDataProvider!")
+        self._order = value
 
     @property
     def classes(self):
