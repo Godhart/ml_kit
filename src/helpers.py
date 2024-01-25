@@ -14,6 +14,19 @@ import time
 import re
 
 DEBUG_PRINT = True
+AUTOIMPORT = False
+
+S_CHAIN = 'chain'
+S_INPUT = 'input'
+S_OUTPUT = 'output'
+S_LAYER = 'layer'
+S_LAYERS = 'layers'
+S_MODEL = 'model'
+S_INPUTS = 'inputs'
+S_PARENTS = 'parents'
+S_CHILDREN = 'children'
+S_IPARENTS = 'iparents'
+S_ICHILDREN = 'ichildren'
 
 
 class timex:
@@ -107,6 +120,73 @@ def chop_list_by_sliding_window(data, chunk_size, step):
     return [data[i:i + chunk_size] for i in range(0, len(data) - chunk_size + 1, step)]
 
 
+class LayerDummy:
+    _id = 0
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.id = LayerDummy._id
+        self.parent = None
+        LayerDummy._id += 1
+        print(f"Layer with id {self.id} were created"
+              f" ( {', '.join([str(v) for v in args] + [str(k) + '=' + str(v) for k, v in kwargs.items()])})")
+
+    def __call__(self, parent, *args, **kwargs):
+        print(f"Layer with id {self.id} were called "
+              f" ( parent={parent}, {', '.join([str(v) for v in args] + [str(k) + '=' + str(v) for k, v in kwargs.items()])})")
+        self.parent = parent
+        return self
+
+    def __str__(self):
+        if self.parent is None:
+            return(f"Layer({self.id})")
+        else:
+            return f"{self.parent}.Layer({self.id})"
+
+    def to_str(self):
+        return f"[[ LayerDummy id={self.id}, parent={self.parent}, " \
+               f"({', '.join([str(v) for v in self.args] + [str(k) + '=' + str(v) for k, v in self.kwargs.items()])}) ]]"
+
+
+class ModelDummy:
+    _id = 0
+    def __init__(self, inputs, outputs, *args, **kwargs):
+        self.inputs = inputs
+        self.outputs = outputs
+        self.args = args
+        self.kwargs = kwargs
+        self.id = ModelDummy._id
+        self._fit_iteration = 0
+        ModelDummy._id += 1
+        print(f"Model with id {self.id} were created"
+              f" ( inputs={inputs}, outputs={outputs}, {', '.join([str(v) for v in args] + [str(k) + '=' + str(v) for k, v in kwargs.items()])})")
+
+    def __str__(self):
+        return f"[[ ModelDummy id={self.id},  inputs={self.inputs}, outputs={self.outputs}]]"
+
+    def __str__(self):
+        return f"[[ LayerDummy id={self.id},  inputs={self.inputs}, outputs={self.outputs}, " \
+               f"({', '.join([str(v) for v in self.args] + [str(k) + '=' + str(v) for k, v in self.kwargs.items()])}) ]]"
+
+    def compile(self, *args, **kwargs):
+        print(f"ModelDummy(id={self.id}.compile({', '.join([str(v) for v in args] + [str(k) + '=' + str(v) for k, v in kwargs.items()])})")
+        self._fit_iteration = 0
+
+    def fit(self, *args, **kwargs):
+        print(f"ModelDummy(id={self.id}.fit({', '.join([str(v) for v in args] + [str(k) + '=' + str(v) for k, v in kwargs.items()])})")
+        self._fit_iteration += 1
+        return ArbitraryClass(
+            history={
+                "loss":         [2**31-self._fit_iteration],
+                "val_loss":     [2**31-self._fit_iteration],
+                "accuracy":     [0.001*self._fit_iteration],
+                "val_accuracy": [0.001*self._fit_iteration],
+                "mae":          [2**31-self._fit_iteration],
+                "val_mae":      [2**31-self._fit_iteration],
+            },
+        )
+
+
 def layer_template(layer_kind, *args, **kwargs):
     return (layer_kind, args, kwargs)
 
@@ -118,18 +198,270 @@ def layer_create(layer_template_data, **variables):
     for i in range(len(args)):
         v = args[i]
         if isinstance(v, str) and v[:1] == "$":
-            args[i] = variables[v[1:]]
+            if v[1:] in variables:
+                args[i] = variables[v[1:]]
     for k, v in kwargs.items():
         if isinstance(v, str) and v[:1] ==  "$":
-            kwargs[k] = variables[v[1:]]
+            if v[1:] in variables:
+                kwargs[k] = variables[v[1:]]
+    if isinstance(layer_kind, str) and layer_kind[:1]=="<" and layer_kind[:-1]==">":
+        if AUTOIMPORT:
+            pass # TODO: try to import according to str # NOTE: it's really unsafe but can be used with YAML
+        else:
+            raise ValueError("'layer_kind' should be a class!")
     return layer_kind(*args, **kwargs)
 
 
-def model_create(model_class, *layers, **variables):
+def _create_layers_chain(parent, *layers, **variables):
+    layers_chain = []
+    for layer in layers:
+        if parent is None:
+            layers_chain.append(layer_create(layer, **variables))
+        else:
+            layers_chain.append((layer_create(layer, **variables))(parent))
+        parent = layers_chain[-1]
+    return layers_chain
+
+
+def _get_iparents(templates, layers):
+    result = []
+    lookup_vars = ["$"+k for k in layers]
+    for _, args, kwargs in templates:
+        for var_name in lookup_vars:
+            if var_name in result:
+                continue
+            if var_name in args or var_name in kwargs.values():
+                result.append(var_name[1:])
+    return result
+
+
+def model_create(model_class, templates, **variables):
     """
     Помогатор для создания модели
     """
-    model = model_class()
-    for layer in layers:
-        model.add(layer_create(layer, **variables))
-    return model
+    if not isinstance(templates, (list, tuple, dict)):
+        raise ValueError("'templates' should be a list, tuple or dict!")
+
+    inputs = None
+    outputs = None
+    model = None
+
+    if isinstance(templates, (list, tuple)):
+        if len(templates) < 2:
+            raise ValueError("Create at least 2 layers!")
+        layers_chain = _create_layers_chain(None, *templates, **variables)
+        model = model_class([layers_chain[0]], layers_chain[-1])
+
+    elif isinstance(templates, dict):
+        branches = {}
+        inputs = []
+        outputs = []
+
+        # Initialize inputs, output and branches
+        for k, v in templates.items():
+            if S_CHAIN in v:
+                raise ValueError(f"Prohibited field '{S_CHAIN}' were found in branch '{k}'!")
+            if not isinstance(v.get(S_LAYERS, None), (list, tuple)):
+                raise ValueError(f"Expected to find '{S_LAYERS}' in branch '{k}' and it should be a list or tuple!")
+            if len(v[S_LAYERS]) < 1:
+                raise ValueError(f"Create at least 2 layers for branch '{k}'!")
+
+            branches[k] = {
+                S_PARENTS: None,
+                S_CHILDREN:None,
+                **copy.deepcopy(v),
+                S_IPARENTS: [],
+                S_ICHILDREN: [],
+            }
+
+            if branches[k][S_PARENTS] is not None:
+                if not isinstance(branches[k][S_PARENTS], list):
+                    if isinstance(branches[k][S_PARENTS], tuple):
+                        branches[k][S_PARENTS] = list(branches[k][S_PARENTS])
+                    else:
+                        branches[k][S_PARENTS] = [branches[k][S_PARENTS]]
+            else:
+                branches[k][S_PARENTS] = []
+
+            if branches[k][S_CHILDREN] is not None:
+                if not isinstance(branches[k][S_CHILDREN], list):
+                    if isinstance(branches[k][S_CHILDREN], tuple):
+                        branches[k][S_CHILDREN] = list(branches[k][S_CHILDREN])
+                    else:
+                        branches[k][S_CHILDREN] = [branches[k][S_CHILDREN]]
+            else:
+                branches[k][S_CHILDREN] = []
+
+            if branches[k].get(S_INPUT, False):
+                inputs.append(k)
+
+            if branches[k].get(S_OUTPUT, False):
+                outputs.append(k)
+
+        if len(inputs) == 0:
+            raise ValueError(f"Specify at least one branch as input (set {S_INPUT} field to True)")
+
+        if len(outputs) == 0:
+            raise ValueError("Output branch is not set! Specify strictly one branch as output (set 'output' field to True)")
+
+        if len(outputs) > 1:
+            raise ValueError(f"Multiple output branches were set! Specify strictly one branch as output (branches are {outputs})")
+
+        # Chain branches (find all children) and do DRC
+
+        ## First - update references using parents fields
+        for k, v in branches.items():
+            iparents = v[S_IPARENTS] = _get_iparents(v[S_LAYERS], branches)
+            parents = v[S_PARENTS] = list(set(v[S_PARENTS]))
+            v[S_IPARENTS] = list(set(v[S_IPARENTS]))
+            if len(parents) + len(iparents) == 0:
+                if k not in inputs:
+                    raise ValueError(f"Non-input branch without parent set! ('{k}')")
+            for p in parents:
+                if p not in branches:
+                    raise ValueError(f"Parent '{p}' wasn't found for branch '{k}'!")
+            for p in parents:
+                branches[p][S_CHILDREN].append(k)
+            for p in iparents:
+                branches[p][S_ICHILDREN].append(k)
+
+        ## Make references distinct
+        for v in branches.values():
+            v[S_CHILDREN] = list(set(v[S_CHILDREN]))
+            v[S_ICHILDREN] = list(set(v[S_ICHILDREN]))
+
+        ## Second - update references using child fields
+        for k, v in branches.items():
+            if len(v[S_CHILDREN]) + len(v[S_ICHILDREN]) == 0:
+                if k not in outputs:
+                    raise ValueError(f"Found childless branch '{k}', but it's not specified as output!")
+            for c in v[S_CHILDREN]:
+                if c not in branches:
+                    raise ValueError(f"Children '{c}' wasn't found for branch '{k}'!")
+                if c not in branches[c][S_PARENTS]:
+                    branches[c][S_PARENTS].append(k)
+
+        ## Make references distinct
+        for v in branches.values():
+            v[S_PARENTS] = list(set(v[S_PARENTS]))
+            v[S_IPARENTS] = list(set(v[S_IPARENTS]))
+
+        ## Make sure inputs don't have parents
+        for k in inputs:
+            if len(branches[k][S_PARENTS]) + len(branches[k][S_IPARENTS]) > 0:
+                raise ValueError(
+                    f"Parents were found for input branch '{k}'!"
+                    f" Direct parents: {branches[k][S_PARENTS]}"
+                    f" Indirect parents (specified via vars): {branches[k][S_IPARENTS]}"
+                )
+
+        # Check not supported cases:
+        for k, v in branches.items():
+            if len(v[S_PARENTS]) > 1:
+                raise NotImplementedError(
+                    f"Multiple parents were found for branch {k}! It's not supported (yet)"
+                    f" ({v[S_PARENTS]})")
+
+        # TODO: check for circular references
+
+        # Create branches at last
+        def _incomplete_branches(branches):
+            return [k for k in branches if S_CHAIN not in branches[k]]
+
+        incomplete_branches = _incomplete_branches(branches)
+        branch_output = {}
+        while len(incomplete_branches) > 0:
+            for k in incomplete_branches:
+                if k not in inputs:
+                    for p in branches[k][S_PARENTS]:
+                        if S_CHAIN not in branches[p]:
+                            continue
+                    for p in branches[k][S_IPARENTS]:
+                        if S_CHAIN not in branches[p]:
+                            continue
+
+                v = branches[k]
+                if 'variables' in v:
+                    branch_vars = {**variables, **v['variables']}
+                else:
+                    branch_vars = variables
+                overlapping = [k for k in branch_output if k in branch_vars]
+                if len(overlapping) > 0:
+                    raise ValueError(f"Error creating branch {k}: existing branches ({overlapping}) are overlapping with variables!")
+                branch_vars = {**branch_vars, **branch_output}
+                if k in inputs:
+                    parents = None
+                else:
+                    parents = branches[v[S_PARENTS][0]][S_CHAIN][-1]
+                branches[k][S_CHAIN] = _create_layers_chain(
+                    parents,
+                    *v[S_LAYERS],
+                    **branch_vars)
+                branch_output[k] = branches[k][S_CHAIN][-1]
+
+            prev_incomplete = incomplete_branches
+            incomplete_branches = _incomplete_branches(branches)
+            if len(prev_incomplete) == len(incomplete_branches):
+                line_break = "\n"
+                raise ValueError(
+                    f"Those branches can't be created (check for circular references): {incomplete_branches}!"
+                    f" {[line_break + k + ': [' + ', '.join([kk for kk in branches[k][S_PARENTS]  if S_CHAIN not in branches[k][S_PARENTS]] + [kk for kk in branches[k][S_IPARENTS] if S_CHAIN not in branches[k][S_IPARENTS]]) for k in incomplete_branches]}]"
+                    )
+        model = model_class([branches[k][S_CHAIN][0] for k in inputs], outputs[0])
+
+    return {S_MODEL: model, S_INPUTS: inputs}
+
+
+if STANDALONE:
+    if __name__ == "__main__":
+        # Test Cases:
+        model_branches = to_dict(
+            in1 = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(LayerDummy, "in_1__layer_1", data=11),
+                    layer_template(LayerDummy, "in_1__layer_2", data=12),
+                    layer_template(LayerDummy, "in_1__layer_3", data=13),
+                    layer_template(LayerDummy, "in_1__layer_4", data=14),
+                ],
+            ),
+
+            in2 = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(LayerDummy, "in_2__layer_1", data=21),
+                    layer_template(LayerDummy, "in_2__layer_2", data=22),
+                    layer_template(LayerDummy, "in_2__layer_3", data=23),
+                ],
+            ),
+
+            branch_1 = to_dict(
+                parents = "in1",
+                layers = [
+                    layer_template(LayerDummy, "br_1__layer_1", data=101),
+                    layer_template(LayerDummy, "br_1__layer_2", data=102, aux="$var1"),
+                    layer_template(LayerDummy, "br_1__layer_3", "$in1", "$in2", data=103),
+                ]
+            ),
+
+            branch_2 = to_dict(
+                parents = ["branch_1", ],
+                output = True,
+                layers = [
+                    layer_template(LayerDummy, "br_2__layer_1", data=201, aux="$lvar1"),
+                    layer_template(LayerDummy, "br_2__layer_2", data=202, aux="$in2"),
+                    layer_template(LayerDummy, "br_2__layer_3", data=203),
+                ],
+                variables = to_dict(
+                    lvar1 = "lvar1_value",
+                )
+            )
+        )
+
+        variables = to_dict(var1="var1_value")
+
+        sequential_model = model_create(ModelDummy, model_branches['branch_1']['layers'], **variables)
+        print(sequential_model)
+
+        branched_model   = model_create(ModelDummy, model_branches, **variables)
+        print(branched_model)
