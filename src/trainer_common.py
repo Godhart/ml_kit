@@ -462,11 +462,13 @@ class ModelHandler():
                 self._context.history[k] += value[k]
 
     def create(self):
-        self._model = model_create(
+        mc = model_create(
             self.model_class,
             *self.model_template,
             **self.model_variables
         )
+        self._model         = mc[S_MODEL]
+        self._inputs_order  = mc[S_INPUTS]
         self._model.compile(
             optimizer=self.context.optimizer,
             loss=self.context.loss,
