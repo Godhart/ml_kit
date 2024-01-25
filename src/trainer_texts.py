@@ -12,27 +12,41 @@ if STANDALONE:
     from trainer_common import *
 
 ###
-# TODO: redefine in main section as necessary
-BOW_USED = False
+ENV__TRAIN__DEFAULT_DATA_PATH       = "ENV__TRAIN__DEFAULT_DATA_PATH"
+ENV__TRAIN__DEFAULT_OPTIMIZER       = "ENV__TRAIN__DEFAULT_OPTIMIZER"
+ENV__TRAIN__DEFAULT_LOSS            = "ENV__TRAIN__DEFAULT_LOSS"
+ENV__TRAIN__DEFAULT_BATCH_SIZE      = "ENV__TRAIN__DEFAULT_BATCH_SIZE"
+ENV__TRAIN__DEFAULT_EPOCHS          = "ENV__TRAIN__DEFAULT_EPOCHS"
+ENV__TRAIN__DEFAULT_TARGET_ACCURACY = "ENV__TRAIN__DEFAULT_TARGET_ACCURACY"
+ENV__TRAIN__DEFAULT_SAVE_STEP       = "ENV__TRAIN__DEFAULT_SAVE_STEP"
+ENV__TRAIN__DEFAULT_FROM_SCRATCH    = "ENV__TRAIN__DEFAULT_FROM_SCRATCH"
 
-DEFAULT_DATA_PATH       = "models_storage"
-DEFAULT_OPTIMIZER       = "rmsprop" # rmsprop is better for ?texts/rnn? than adam
-DEFAULT_LOSS            = "categorical_crossentropy"
-DEFAULT_BATCH_SIZE      = 10
-DEFAULT_EPOCHS          = 50
-DEFAULT_TARGET_ACCURACY = 1.0
-DEFAULT_SAVE_STEP       = 10
-DEFAULT_FROM_SCRATCH    = None
+ENV__TEXTS__BOW_USED                = "ENV__TEXTS__BOW_USED"
+ENV__TEXTS__TOKENIZER_FILTERS       = "ENV__TEXTS__TOKENIZER_FILTERS"
+ENV__TEXTS__TRAIN_TEXTS_PATH        = "ENV__TEXTS__TRAIN_TEXTS_PATH"
+ENV__TEXTS__TRAIN_TEXTS_NAME_REGEX  = "ENV__TEXTS__TRAIN_TEXTS_NAME_REGEX"
+ENV__TEXTS__TRAIN_TEXTS_SUBSETS     = "ENV__TEXTS__TRAIN_TEXTS_SUBSETS"
 
-TOKENIZER_FILTERS       = '!"#$%&()*+,-–—./…:;<=>?@[\\]^_`{|}~«»\t\n\xa0\ufeff'
-TRAIN_TEXTS_PATH        = "train_texts"
-TRAIN_TEXTS_NAME_REGEX  = ('\((.+)\) (\S+)_', 0, 1)
+
+ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "models_storage"
+ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = "rmsprop" # rmsprop is better for ?texts/rnn? than adam
+ENV[ENV__TRAIN__DEFAULT_LOSS]            = "categorical_crossentropy"
+ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 10
+ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 50
+ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0
+ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
+ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
+
+ENV[ENV__TEXTS__BOW_USED] = False
+ENV[ENV__TEXTS__TOKENIZER_FILTERS]       = '!"#$%&()*+,-–—./…:;<=>?@[\\]^_`{|}~«»\t\n\xa0\ufeff'
+ENV[ENV__TEXTS__TRAIN_TEXTS_PATH]        = "train_texts"
+ENV[ENV__TEXTS__TRAIN_TEXTS_NAME_REGEX]  = ('\((.+)\) (\S+)_', 0, 1)
 # regex определяет имена файлов, которые будут загружены для обучения
 #   индексы после regex задают номер capture group для:
 #   - первый индекс - для имени класса
 #   - второй индекс - для названия набора выборки
 
-TRAIN_TEXTS_SUBSETS     = ('обучающая', 'тестовая')
+ENV[ENV__TEXTS__TRAIN_TEXTS_SUBSETS]     = ('обучающая', 'тестовая')
 # определяет как поименованы файлы для (какое содержат слово)
 # - первый элемент - для обучающей выборки
 # - второй элемент - для тестовой выборки
@@ -161,7 +175,7 @@ def prepare_tokenizer(text, vocab_size, oov_token='_oov_'):
     """
     Создаёт токены на базе текстов
     """
-    tokenizer = Tokenizer(num_words=vocab_size, filters=TOKENIZER_FILTERS,
+    tokenizer = Tokenizer(num_words=vocab_size, filters=ENV[ENV__TEXTS__TOKENIZER_FILTERS],
                         lower=True, split=' ', oov_token=oov_token, char_level=False)
     tokenizer.fit_on_texts(text)
     return tokenizer
@@ -454,25 +468,25 @@ def text_train__all_together(
         mhd = ClassClassifierHandler(
             name            = model_data['name'],
             model_class     = model_data['class'],
-            optimizer       = model_data.get('optimizer', DEFAULT_OPTIMIZER),
-            loss            = model_data.get('loss',      DEFAULT_LOSS),
+            optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
+            loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
             model_template  = model_data['template'],
             model_variables = variables,
             class_labels    = train_data.classes_labels,
-            batch_size      = model_data.get('batch_size',DEFAULT_BATCH_SIZE),
+            batch_size      = model_data.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
             **train_data.all_as_dict()
         )
         thd = TrainHandler(
-            data_path       = ENV[S_MODELS_ROOT] / model_data.get("data_path", DEFAULT_DATA_PATH),
+            data_path       = ENV[ENV__MODEL__DATA_ROOT] / model_data.get("data_path", ENV[ENV__TRAIN__DEFAULT_DATA_PATH]),
             data_name       = model_data['name'],
             mhd             = mhd,
             mhd_class       = ClassClassifierHandler,
         )
         thd.train(
-            from_scratch    = model_data.get("from_scratch", DEFAULT_FROM_SCRATCH),
-            epochs          = model_data.get("epochs", DEFAULT_EPOCHS),
-            target_accuracy = model_data.get("target_accuracy", DEFAULT_TARGET_ACCURACY),
-            save_step       = model_data.get("save_step", DEFAULT_SAVE_STEP),
+            from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
+            epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
+            target_accuracy = model_data.get("target_accuracy", ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY]),
+            save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
             display_callback= display_callback
         )
         if unload_models:
@@ -484,12 +498,12 @@ def text_train__all_together(
 # Usage example
 if STANDALONE:
     if False and __name__ == "__main__":
-        texts = load_texts_from_dir(TRAIN_TEXTS_PATH, TRAIN_TEXTS_NAME_REGEX, TRAIN_TEXTS_SUBSETS)
+        texts = load_texts_from_dir(ENV[ENV__TEXTS__TRAIN_TEXTS_PATH], ENV[ENV__TEXTS__TRAIN_TEXTS_NAME_REGEX], ENV[ENV__TEXTS__TRAIN_TEXTS_SUBSETS])
         text_train_data = TextTrainDataProvider(
             texts,
             vocab_size,
             chunk_size,
             chunk_step,
-            bow_used=BOW_USED,
+            bow_used=ENV[ENV__TEXTS__BOW_USED],
             debug=ENV[ENV__DEBUG_PRINT],
         )

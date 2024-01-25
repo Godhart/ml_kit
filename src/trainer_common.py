@@ -24,13 +24,13 @@ from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
 ###
-ENV__MODELS_ROOT = "drive_root"
-ENV[ENV__MODELS_ROOT] = Path("~/ai-learn")
+ENV__MODEL__DATA_ROOT = "ENV__MODEL__DATA_ROOT"
+ENV[ENV__MODEL__DATA_ROOT] = Path("~/ai-learn")
 
 def connect_gdrive():
     from google.colab import drive
     drive.mount("/content/drive/")
-    ENV[ENV__MODELS_ROOT] = Path("/content/drive/MyDrive/ai-learn")
+    ENV[ENV__MODEL__DATA_ROOT] = Path("/content/drive/MyDrive/ai-learn")
 ###
 
 S_EXTERNAL = "_external_"
@@ -873,7 +873,7 @@ if STANDALONE:
         ###
         # Just Load and train
         thd = TrainHandler(
-            data_path = ENV[ENV__MODELS_ROOT] / "some_additional_path",
+            data_path = ENV[ENV__MODEL__DATA_ROOT] / "some_additional_path",
             data_name = "some_specific_name",
             mhd = mhd
         )
@@ -890,7 +890,7 @@ if STANDALONE:
         ###
         # Load and eval
         thd = TrainHandler(
-            data_path = ENV[ENV__MODELS_ROOT] / "some_additional_path",
+            data_path = ENV[ENV__MODEL__DATA_ROOT] / "some_additional_path",
             data_name = "some_specific_name",
         )
         thd.load_best()

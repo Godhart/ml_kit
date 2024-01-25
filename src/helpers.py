@@ -13,8 +13,8 @@ import copy
 import time
 import re
 
-ENV__CREATE_MODEL__AUTOIMPORT = 'autoimport'
-ENV[ENV__CREATE_MODEL__AUTOIMPORT] = False
+ENV__MODEL__CREATE_AUTOIMPORT = 'ENV__MODEL__CREATE_AUTOIMPORT'
+ENV[ENV__MODEL__CREATE_AUTOIMPORT] = False
 
 S_CHAIN = 'chain'
 S_INPUT = 'input'
@@ -205,7 +205,7 @@ def layer_create(layer_template_data, **variables):
             if v[1:] in variables:
                 kwargs[k] = variables[v[1:]]
     if isinstance(layer_kind, str) and layer_kind[:1]=="<" and layer_kind[:-1]==">":
-        if ENV[ENV__CREATE_MODEL__AUTOIMPORT]:
+        if ENV[ENV__MODEL__CREATE_AUTOIMPORT]:
             pass # TODO: try to import according to str # NOTE: it's really unsafe but can be used with YAML
         else:
             raise ValueError("'layer_kind' should be a class!")

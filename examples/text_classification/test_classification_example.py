@@ -35,24 +35,24 @@ if not STANDALONE:
 
 # Перегрузка констант под текущую задачу
 
-BOW_USED = False
+ENV[ENV__TEXTS__BOW_USED] = False
 
-DEFAULT_DATA_PATH       = "lesson_6_lite_1"
-DEFAULT_LOSS            = "categorical_crossentropy"
-DEFAULT_BATCH_SIZE      = 512
-DEFAULT_EPOCHS          = 100
-DEFAULT_TARGET_ACCURACY = 1.0   # максимум чтобы каждая сеть прошла все эпохи обучения
-DEFAULT_SAVE_STEP       = 10
-DEFAULT_FROM_SCRATCH    = None
+ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_6_lite_1"
+ENV[ENV__TRAIN__DEFAULT_LOSS]            = "categorical_crossentropy"
+ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 512
+ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 100
+ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0   # максимум чтобы каждая сеть прошла все эпохи обучения
+ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
+ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
-TRAIN_TEXTS_PATH        = "writers"
-TRAIN_TEXTS_NAME_REGEX  = ('\((.+)\) (\S+)_', 0, 1)
+ENV[ENV__TEXTS__TRAIN_TEXTS_PATH]        = "writers"
+ENV[ENV__TEXTS__TRAIN_TEXTS_NAME_REGEX]  = ('\((.+)\) (\S+)_', 0, 1)
 # regex определяет имена файлов, которые будут загружены для обучения
 #   индексы после regex задают номер capture group для:
 #   - первый индекс - для имени класса
 #   - второй индекс - для названия набора выборки
 
-TRAIN_TEXTS_SUBSETS     = ('обучающая', 'тестовая')
+ENV[ENV__TEXTS__TRAIN_TEXTS_SUBSETS]     = ('обучающая', 'тестовая')
 # определяет как поименованы файлы для (какое содержат слово)
 # - первый элемент - для обучающей выборки
 # - второй элемент - для тестовой выборки
@@ -62,7 +62,7 @@ TRAIN_TEXTS_SUBSETS     = ('обучающая', 'тестовая')
 
 # Загрузка текстов
 if True or STANDALONE:
-    texts = load_texts_from_dir(TRAIN_TEXTS_PATH, TRAIN_TEXTS_NAME_REGEX, TRAIN_TEXTS_SUBSETS)
+    texts = load_texts_from_dir(ENV[ENV__TEXTS__TRAIN_TEXTS_PATH], ENV[ENV__TEXTS__TRAIN_TEXTS_NAME_REGEX], ENV[ENV__TEXTS__TRAIN_TEXTS_SUBSETS])
 # т.к. тексты уже загружены - привести к нужному формату
 else:
     texts = TrainTexts(CLASS_LIST, text_train, text_test)
@@ -147,7 +147,7 @@ for hyper_params in hyper_params_sets:
     # Подготовить данные в соответствии с параметрами
     text_train_data = TextTrainDataProvider(
         texts,
-        bow_used=BOW_USED,
+        bow_used=ENV[ENV__TEXTS__BOW_USED],
         debug=ENV[ENV__DEBUG_PRINT],
         **hyper_params,
     )

@@ -1,4 +1,4 @@
 ENV = {}
 
-ENV__DEBUG_PRINT = 'debug_print'
+ENV__DEBUG_PRINT = 'ENV__DEBUG_PRINT'
 ENV[ENV__DEBUG_PRINT] = True
