@@ -2,11 +2,12 @@
 # Models Trainer common classes
 
 try:
-    # If running as standalone - need to import some in following manner
-    from helpers import *
-    STANDALONE = True
-except Exception as e:
+    from standalone import STANDALONE
+except ImportError:
     STANDALONE = False
+
+if STANDALONE:
+    from helpers import *
 
 from pathlib import Path
 import copy
@@ -735,7 +736,7 @@ class TrainHandler:
 
 # Few usage examples
 if STANDALONE:
-    if False:
+    if False and __name__ == "__main__":
         ### Crate model handler
         mhd = ClassClassifierHandler(
             name        ="conv1",
