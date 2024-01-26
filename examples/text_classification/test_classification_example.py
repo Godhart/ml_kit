@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 
 # Класс для конструирования последовательной модели нейронной сети
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, Sequential
 
 # Основные слои
 from tensorflow.keras.layers import Dense, Dropout, SpatialDropout1D, BatchNormalization, Embedding, Flatten, Activation
@@ -74,7 +74,7 @@ else:
 models = to_dict(
     conv1 = to_dict(
         name            = "conv1",
-        model_class     = Model,
+        model_class     = Sequential,
         template        = [
             # Список слоев и их параметров
             layer_template(Embedding,           '$vocab_size', 10, input_length='$chunk_size'),
