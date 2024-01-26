@@ -224,10 +224,10 @@ def _create_layers_chain(parent, *layers, **variables):
     layers_chain = []
     for layer in layers:
         if parent is None:
-            layers_chain.append(layer_create(layer, **variables))
+            parent = layer_create(layer, **variables)
         else:
-            layers_chain.append((layer_create(layer, **variables))(parent))
-        parent = layers_chain[-1]
+            parent = layer_create(layer, **variables)(parent)
+        layers_chain.append(parent)
     return layers_chain
 
 
