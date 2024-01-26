@@ -257,8 +257,13 @@ def model_create(model_class, templates, **variables):
     if isinstance(templates, (list, tuple)):
         if len(templates) < 2:
             raise ValueError("Create at least 2 layers!")
-        layers_chain = _create_layers_chain(None, *templates, **variables)
-        model = model_class([layers_chain[0]], layers_chain[-1])
+        if hasattr(model_class, 'add'): # NOTE: this is for Sequential model
+            model = model_class()
+            for layer in templates:
+                model.add(layer_create(layer, **variables))
+        else:
+            layers_chain = _create_layers_chain(None, *templates, **variables)
+            model = model_class([layers_chain[0]], layers_chain[-1])
 
     elif isinstance(templates, dict):
         branches = {}
