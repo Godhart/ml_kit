@@ -1,6 +1,12 @@
 ###
 # Решение задачи
 
+import sys
+import os
+from pathlib import Path
+
+sys.path.insert(0, str((Path(os.curdir).absolute() / ".." / "..").resolve()))
+
 try:
     from ml_kit.standalone import STANDALONE
 except ImportError:
