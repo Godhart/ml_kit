@@ -24,7 +24,6 @@ from tensorflow.keras.layers import SimpleRNN, GRU, LSTM, Bidirectional, Conv1D,
 ###
 
 ENV[ENV__DEBUG_PRINT] = True
-DEBUG_PRINT = True
 
 ###
 if not STANDALONE:
