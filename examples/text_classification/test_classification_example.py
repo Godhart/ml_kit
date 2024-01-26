@@ -11,9 +11,6 @@ if STANDALONE:
     from ml_kit.src.trainer_common import *
     from ml_kit.src.trainer_texts import *
     
-import os
-from pathlib import Path
-
 # Класс для конструирования последовательной модели нейронной сети
 from tensorflow.keras.models import Model, Sequential
 
