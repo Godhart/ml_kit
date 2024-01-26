@@ -2,14 +2,14 @@
 # Решение задачи
 
 try:
-    from ml_kit.src.standalone import STANDALONE
+    from ml_kit.standalone import STANDALONE
 except ImportError:
     STANDALONE = False
 
 if STANDALONE:
-    from ml_kit.src.helpers import *
-    from ml_kit.src.trainer_common import *
-    from ml_kit.src.trainer_texts import *
+    from ml_kit.helpers import *
+    from ml_kit.trainer_common import *
+    from ml_kit.trainer_texts import *
     
 # Класс для конструирования последовательной модели нейронной сети
 from tensorflow.keras.models import Model, Sequential

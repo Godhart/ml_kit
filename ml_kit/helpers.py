@@ -6,7 +6,7 @@ try:
     IMPORT_ML_KIT = False
 except ImportError:
     try:
-        from ml_kit.src.standalone import STANDALONE
+        from ml_kit.standalone import STANDALONE
         IMPORT_ML_KIT = True
     except ImportError:
         STANDALONE = False
@@ -15,7 +15,7 @@ if STANDALONE:
     if not IMPORT_ML_KIT:
         from env import *
     else:
-        from ml_kit.src.env import *
+        from ml_kit.env import *
 
 import copy
 import time
