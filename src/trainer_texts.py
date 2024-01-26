@@ -25,6 +25,7 @@ if STANDALONE:
 ENV__TRAIN__DEFAULT_DATA_PATH       = "ENV__TRAIN__DEFAULT_DATA_PATH"
 ENV__TRAIN__DEFAULT_OPTIMIZER       = "ENV__TRAIN__DEFAULT_OPTIMIZER"
 ENV__TRAIN__DEFAULT_LOSS            = "ENV__TRAIN__DEFAULT_LOSS"
+ENV__TRAIN__DEFAULT_METRICS         = "ENV__TRAIN__DEFAULT_METRICS"
 ENV__TRAIN__DEFAULT_BATCH_SIZE      = "ENV__TRAIN__DEFAULT_BATCH_SIZE"
 ENV__TRAIN__DEFAULT_EPOCHS          = "ENV__TRAIN__DEFAULT_EPOCHS"
 ENV__TRAIN__DEFAULT_TARGET_ACCURACY = "ENV__TRAIN__DEFAULT_TARGET_ACCURACY"
@@ -41,6 +42,7 @@ ENV__TEXTS__TRAIN_TEXTS_SUBSETS     = "ENV__TEXTS__TRAIN_TEXTS_SUBSETS"
 ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "models_storage"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = "rmsprop" # rmsprop is better for ?texts/rnn? than adam
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = "categorical_crossentropy"
+ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_ACCURACY]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 10
 ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 50
 ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0
@@ -282,26 +284,40 @@ class TextTrainDataProvider(TrainDataProvider):
 
     def __init__(
         self, texts:TrainTexts, vocab_size:int, chunk_size:int, chunk_step:int, bow_used:bool=False, debug:bool=False,
-        order = None,
     ):
+        super(TextTrainDataProvider, self).__init__(
+            x_train = None,
+            y_train = None,
+            x_val   = None,
+            y_val   = None,
+            x_test  = None,
+            y_test  = None,
+        )
         self._texts = texts
         self._vocab_size = vocab_size
         self._chunk_size = chunk_size
         self._chunk_step = chunk_step
         self._bow_used = bow_used
         self._debug = debug
-        self.order = order
         self._prepare()
         
     @property
-    def order(self):
-        return self._order
+    def x_order(self):
+        return None
     
-    @order.setter()
-    def order(self, value):
+    @x_order.setter
+    def x_order(self, value):
         if value is not None:
-            raise ValueError("'order' other than None is not supported by TextTrainDataProvider!")
-        self._order = value
+            raise ValueError("'x_order' other than None is not supported by TextTrainDataProvider!")
+
+    @property
+    def y_order(self):
+        return None
+    
+    @x_order.setter
+    def y_order(self, value):
+        if value is not None:
+            raise ValueError("'y_order' other than None is not supported by TextTrainDataProvider!")
 
     @property
     def classes(self):
@@ -322,21 +338,6 @@ class TextTrainDataProvider(TrainDataProvider):
     @property
     def tokenizer(self):
         return self._tokenizer
-
-    @property
-    def x_val(self):
-        # TODO: now test and validation data are the same
-        return self.x_test
-
-    @property
-    def x_val_bow(self):
-        # TODO: now test and validation data are the same
-        return self.x_test_bow
-
-    @property
-    def y_val(self):
-        # TODO: now test and validation data are the same
-        return self.y_test
 
     def _prepare(self):
         self._tokenizer = prepare_tokenizer(self._texts.train, self._vocab_size)
@@ -361,24 +362,29 @@ class TextTrainDataProvider(TrainDataProvider):
             print("Он же в виде последовательности индексов: ", self._seq_train[1][:20])
 
         with timex("Преобразование текста в обучающие последовательности"):
-            self.x_train, self.y_train = prepare_long_texts(
+            self._x_train, self._y_train = prepare_long_texts(
                 self._seq_train, self._texts.classes, self._chunk_size, self._chunk_step)
 
-            self.x_test, self.y_test = prepare_long_texts(
+            self._x_test, self._y_test = prepare_long_texts(
                 self._seq_test, self._texts.classes, self._chunk_size, self._chunk_step)
+            
+            # TODO: now test and validation data are the same
+            self._x_val = self._x_test
+            self._y_val = self._y_test
 
         if self._debug:
             # Проверка формы сформированных данных
-            print("x_train.shape=", self.x_train.shape, " y_train.shape=", self.y_train.shape)
-            print("x_test.shape =", self.x_test.shape,  " y_test.shape =", self.y_test.shape)
+            print("x_train.shape=", self._x_train.shape, " y_train.shape=", self._y_train.shape)
+            print("x_test.shape =", self._x_test.shape,  " y_test.shape =", self._y_test.shape)
             # Вывод отрезка индексов тренировочной выборки
             print("Отрезок индексов тренировочной выборки", self.x_train[0])
 
         if self._bow_used:
             with timex("Преобразование последовательностей в bow"):
                 # На входе .sequences_to_matrix() ожидает список, .tolist() выполняет преобразование типа
-                self.x_train_bow = tokens_to_bow(self.x_train.tolist(), self._tokenizer)
-                self.x_test_bow  = tokens_to_bow(self.x_test.tolist(), self._tokenizer)
+                self.x_train_bow = tokens_to_bow(self._x_train.tolist(), self._tokenizer)
+                self.x_test_bow  = tokens_to_bow(self._x_test.tolist(), self._tokenizer)
+                self.x_val_bow   = tokens_to_bow(self._x_val.tolist(), self._tokenizer)
 
             if self._debug:
                 # Вывод формы обучающей выборки в виде разреженной матрицы Bag of Words
@@ -388,42 +394,64 @@ class TextTrainDataProvider(TrainDataProvider):
             else:
                 self.x_train_bow = None
                 self.x_test_bow = None
+                self.x_val_bow = None
 
     def bow_all_as_tuple(self):
         if not self._bow_used:
             raise ValueError("No BOW data!")
-        return self.x_train_bow, self.y_train, self.x_val_bow, self.y_val, self.x_test_bow, self.y_test
+        return (
+            self.x_train_bow,
+            self._y_train,
+            self.x_val_bow,
+            self._y_val,
+            self.x_test_bow,
+            self._y_test,
+        )
 
     def bow_train_val_as_tuple(self):
         if not self._bow_used:
             raise ValueError("No BOW data!")
-        return self.x_train_bow, self.y_train, self.x_val_bow, self.y_val
+        return (
+            self.x_train_bow,
+            self._y_train,
+            self.x_val_bow,
+            self._y_val,
+        )
 
     def bow_train_as_tuple(self):
         if not self._bow_used:
             raise ValueError("No BOW data!")
-        return self.x_train_bow, self.y_train
+        return (
+            self.x_train_bow,
+            self._y_train,
+        )
 
     def bow_val_as_tuple(self):
         if not self._bow_used:
             raise ValueError("No BOW data!")
-        return self.x_val_bow, self.y_val
+        return (
+            self.x_val_bow,
+            self._y_val,
+        )
 
     def bow_test_as_tuple(self):
         if not self._bow_used:
             raise ValueError("No BOW data!")
-        return self.x_test_bow, self.y_test
+        return (
+            self.x_test_bow,
+            self._y_test,
+        )
 
     def bow_all_as_dict(self):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return {
             "x_train"   : self.x_train_bow,
-            "y_train"   : self.y_train,
+            "y_train"   : self._y_train,
             "x_val"     : self.x_val_bow,
-            "y_val"     : self.y_val,
+            "y_val"     : self._y_val,
             "x_test"    : self.x_test_bow,
-            "y_test"    : self.y_test,
+            "y_test"    : self._y_test,
         }
 
     def bow_all_as_dict(self):
@@ -431,11 +459,11 @@ class TextTrainDataProvider(TrainDataProvider):
             raise ValueError("No BOW data!")
         return {
             "x_train"   : self.x_train_bow,
-            "y_train"   : self.y_train,
+            "y_train"   : self._y_train,
             "x_val"     : self.x_val_bow,
-            "y_val"     : self.y_val,
+            "y_val"     : self._y_val,
             "x_test"    : self.x_test_bow,
-            "y_test"    : self.y_test,
+            "y_test"    : self._y_test,
         }
 
     def bow_tain_val_as_dict(self):
@@ -443,9 +471,9 @@ class TextTrainDataProvider(TrainDataProvider):
             raise ValueError("No BOW data!")
         return {
             "x_train"   : self.x_train_bow,
-            "y_train"   : self.y_train,
+            "y_train"   : self._y_train,
             "x_val"     : self.x_val_bow,
-            "y_val"     : self.y_val,
+            "y_val"     : self._y_val,
         }
 
     def bow_train_as_dict(self):
@@ -453,7 +481,7 @@ class TextTrainDataProvider(TrainDataProvider):
             raise ValueError("No BOW data!")
         return {
             "x_train"   : self.x_train_bow,
-            "y_train"   : self.y_train,
+            "y_train"   : self._y_train,
         }
 
     def bow_val_as_dict(self):
@@ -461,7 +489,7 @@ class TextTrainDataProvider(TrainDataProvider):
             raise ValueError("No BOW data!")
         return {
             "x_val"     : self.x_val_bow,
-            "y_val"     : self.y_val,
+            "y_val"     : self._y_val,
         }
 
     def bow_test_as_dict(self):
@@ -469,7 +497,7 @@ class TextTrainDataProvider(TrainDataProvider):
             raise ValueError("No BOW data!")
         return {
             "x_test"    : self.x_test_bow,
-            "y_test"    : self.y_test,
+            "y_test"    : self._y_test,
         }
 
 
@@ -491,11 +519,12 @@ def text_train__all_together(
             model_class     = model_data['model_class'],
             optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
             loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
+            metrics         = model_data.get('metrics',   ENV[ENV__TRAIN__DEFAULT_METRICS]),
             model_template  = model_data['template'],
             model_variables = variables,
             class_labels    = train_data.classes_labels,
             batch_size      = model_data.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
-            **train_data.all_as_dict()
+            data_provider   = train_data,
         )
         thd = TrainHandler(
             data_path       = ENV[ENV__MODEL__DATA_ROOT] / model_data.get("data_path", ENV[ENV__TRAIN__DEFAULT_DATA_PATH]),
