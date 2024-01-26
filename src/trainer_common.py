@@ -52,6 +52,8 @@ S_ACCURACY = "accuracy"
 S_MAE = "mae"
 S_LOSS = "loss"
 
+MAE_MAX = float(2**31-1)
+
 METRICS = [S_ACCURACY, S_MAE, ]
 METRICS_T = {
     S_ACCURACY  : "доля верных ответов",
@@ -66,117 +68,126 @@ class TrainDataProvider:
     Упрощает написание кода, позволяет избегать ошибок из-за путаницы имен
     """
 
-    def __init__(self,x_train, y_train, x_val, y_val, x_test, y_test, order=None):
+    def __init__(self,x_train, y_train, x_val, y_val, x_test, y_test, x_order=None, y_order=None,):
         self._x_train = x_train
         self._y_train = y_train
         self._x_val   = x_val
         self._y_val   = y_val
         self._x_test  = x_test
         self._y_test  = y_test
-        self.order    = order
-        
-    def _o(self, data, order):
-        order = order or self.order
+        self.x_order  = x_order
+        self.y_order  = y_order
+
+    def _x(self, data, order):
+        order = order or self.x_order
         if order is None:
             return data
         if not isinstance(data, (dict, list, tuple)):
             raise ValueError("Ordered output only available for data organized as dict, list or tuple")
         return [data[k] for k in order]
-    
+
+    def _y(self, data, order):
+        order = order or self.y_order
+        if order is None:
+            return data
+        if not isinstance(data, (dict, list, tuple)):
+            raise ValueError("Ordered output only available for data organized as dict, list or tuple")
+        return [data[k] for k in order]
+
     @property
     def x_train(self):
-        return self._o(self._x_train)
+        return self._x(self._x_train, None)
 
     @property
     def y_train(self):
-        return self._o(self._y_train)
+        return self._y(self._y_train, None)
 
     @property
     def x_val(self):
-        return self._o(self._x_val)
+        return self._x(self._x_val, None)
 
     @property
     def y_val(self):
-        return self._o(self._x_val)
+        return self._y(self._y_val, None)
 
     @property
     def x_test(self):
-        return self._o(self._x_test)
+        return self._x(self._x_test, None)
 
     @property
     def y_test(self):
-        return self._o(self._y_test)
+        return self._y(self._y_test, None)
 
-    def all_as_tuple(self, order=None):
+    def all_as_tuple(self, x_order=None, y_order=None):
         return (
-            self._o(self.x_train, order),
-            self._o(self.y_train, order),
-            self._o(self.x_val  , order),
-            self._o(self.y_val  , order),
-            self._o(self.x_test , order),
-            self._o(self.y_test , order),
+            self._x(self.x_train, x_order),
+            self._y(self.y_train, y_order),
+            self._x(self.x_val  , x_order),
+            self._y(self.y_val  , y_order),
+            self._x(self.x_test , x_order),
+            self._y(self.y_test , y_order),
         )
 
-    def train_val_as_tuple(self, order=None):
+    def train_val_as_tuple(self, x_order=None, y_order=None):
         return (
-            self._o(self.x_train, order),
-            self._o(self.y_train, order),
-            self._o(self.x_val  , order),
-            self._o(self.y_val  , order),
+            self._x(self.x_train, x_order),
+            self._y(self.y_train, y_order),
+            self._x(self.x_val  , x_order),
+            self._y(self.y_val  , y_order),
         )
 
-    def train_as_tuple(self, order=None):
+    def train_as_tuple(self, x_order=None, y_order=None):
         return (
-            self._o(self.x_train, order),
-            self._o(self.y_train, order),
+            self._x(self.x_train, x_order),
+            self._y(self.y_train, y_order),
         )
 
-    def val_as_tuple(self, order=None):
+    def val_as_tuple(self, x_order=None, y_order=None):
         return (
-            self._o(self.x_val, order),
-            self._o(self.y_val, order),
+            self._x(self.x_val, x_order),
+            self._y(self.y_val, y_order),
         )
 
-    def test_as_tuple(self, order=None):
+    def test_as_tuple(self, x_order=None, y_order=None):
         return (
-            self._o(self.x_test, order),
-            self._o(self.y_test, order),
+            self._x(self.x_test, x_order),
+            self._y(self.y_test, y_order),
         )
 
-    def all_as_dict(self, order=None):
+    def all_as_dict(self, x_order=None, y_order=None):
         return {
-            "x_train"   : self._o(self.x_train, order),
-            "y_train"   : self._o(self.y_train, order),
-            "x_val"     : self._o(self.x_val  , order),
-            "y_val"     : self._o(self.y_val  , order),
-            "x_test"    : self._o(self.x_test , order),
-            "y_test"    : self._o(self.y_test , order),
+            "x_train"   : self._x(self.x_train, x_order),
+            "y_train"   : self._y(self.y_train, y_order),
+            "x_val"     : self._x(self.x_val  , x_order),
+            "y_val"     : self._y(self.y_val  , y_order),
+            "x_test"    : self._x(self.x_test , x_order),
+            "y_test"    : self._y(self.y_test , y_order),
         }
 
-    def train_val_as_dict(self, order=None):
+    def train_val_as_dict(self, x_order=None, y_order=None):
         return {
-            "x_train"   : self._o(self.x_train, order),
-            "y_train"   : self._o(self.y_train, order),
-            "x_val"     : self._o(self.x_val  , order),
-            "y_val"     : self._o(self.y_val  , order),
+            "x_train"   : self._x(self.x_train, x_order),
+            "y_train"   : self._y(self.y_train, y_order),
+            "x_val"     : self._x(self.x_val  , x_order),
+            "y_val"     : self._y(self.y_val  , y_order),
         }
 
-    def train_as_dict(self, order=None):
+    def train_as_dict(self, x_order=None, y_order=None):
         return {
-            "x_train"   : self._o(self.x_train, order),
-            "y_train"   : self._o(self.y_train, order),
+            "x_train"   : self._x(self.x_train, x_order),
+            "y_train"   : self._y(self.y_train, y_order),
         }
 
-    def val_as_dict(self, order=None):
+    def val_as_dict(self, x_order=None, y_order=None):
         return {
-            "x_val"     : self._o(self.x_val  , order),
-            "y_val"     : self._o(self.y_val  , order),
+            "x_val"     : self._x(self.x_val  , x_order),
+            "y_val"     : self._y(self.y_val  , y_order),
         }
 
-    def test_as_dict(self, order=None):
+    def test_as_dict(self, x_order=None, y_order=None):
         return {
-            "x_test"    : self._o(self.x_test , order),
-            "y_test"    : self._o(self.y_test , order),
+            "x_test"    : self._x(self.x_test , x_order),
+            "y_test"    : self._y(self.y_test , y_order),
         }
 
 
@@ -190,6 +201,7 @@ class ModelContext:
     """
 
     _hist_figsize           = (8, 3)
+    _extra_dump_vars        = tuple()
 
     def __init__(
         self,
@@ -215,8 +227,8 @@ class ModelContext:
         self.history        = history
         self.report_history = None
         self.test_pred      = test_pred
-        self.test_accuracy  = test_accuracy
-        self.test_mae       = test_mae
+        self._test_accuracy = test_accuracy
+        self._test_mae      = test_mae
 
     @property
     def history(self):
@@ -230,26 +242,46 @@ class ModelContext:
     def accuracy(self):
         if self._history is None:
             return 0.0
-        return self._history.get("val_accuracy", [0.0])[-1]
+        return float(self._history.get("val_accuracy", [0.0])[-1])
 
     @property
     def mae(self):
         if self._history is None:
-            return 2**31-1
-        return self._history.get("val_mae", [2**31-1])[-1]
+            return MAE_MAX
+        return float(self._history.get("val_mae", [MAE_MAX])[-1])
+
+    @property
+    def test_accuracy(self):
+        if self._test_accuracy is None:
+            return None
+        return float(self._test_accuracy)
+
+    @test_accuracy.setter
+    def test_accuracy(self, value):
+        self._test_accuracy = value
+
+    @property
+    def test_mae(self):
+        if self._test_mae is None:
+            return None
+        return float(self._test_mae)
+
+    @test_mae.setter
+    def test_mae(self, value):
+        self._test_mae = value
 
     @property
     def epoch(self):
         if self._history is None:
             return 0
-        return max([len(self._history.get(metric, []) for metric in METRICS)])
+        return max([len(self._history.get(metric, [])) for metric in self.metrics])
 
     def _plot_images(self, plotter, plot_f, plot_hist_args):
         plot_history = self.report_history or self.history
         if plot_history is not None:
-            print_metrics = [S_LOSS] + [m for m in METRICS if m in plot_history]
+            print_metrics = [S_LOSS] + [m for m in self.metrics if m in plot_history]
             cols = 2
-            rows = (print_metrics+cols-1) // cols
+            rows = (len(print_metrics)+cols-1) // cols
             figsize = (self._hist_figsize[0]*cols, self._hist_figsize[1]*rows)
             fig, subplots = plotter.subplots(rows, cols, figsize=figsize)
             fig.suptitle('График процесса обучения модели')
@@ -282,33 +314,34 @@ class ModelContext:
         with open(path / f"epoch-{self.epoch}", "w") as f:
             pass
         dump_data = {
-            "name"          : safe_dict(self.name),
-            "model_class"   : safe_dict(self.model_class),
-            "optimizer"     : safe_dict(self.optimizer),
-            "epoch"         : safe_dict(self.epoch),
-            "loss"          : safe_dict(self.loss),
-            "metrics"       : safe_dict(self.metrics),
+            "name"          : self.name,
+            "model_class"   : self.model_class,
+            "optimizer"     : self.optimizer,
+            "epoch"         : self.epoch,
+            "loss"          : self.loss,
+            "metrics"       : self.metrics,
         }
         for metric in self.metrics:
             if hasattr(self, metric):
-                with open(path / safe_path(f"val_{metric}-{getattr(self, metric)}", "w")) as f:
+                with open(path / safe_path(f"val_{metric}-{getattr(self, metric)}"), "w") as f:
                     pass
                 dump_data['val_'+metric] = getattr(self, metric)
             if hasattr(self, 'test_'+metric):
                 with open(path / safe_path(f"test_{metric}-{getattr(self, 'test_'+metric)}"), "w") as f:
                     pass
                 dump_data['test_'+metric] = getattr(self, 'test_'+metric)
+        for v in self._extra_dump_vars:
+            dump_data[v] = getattr(self, v)
+        dump_data['model_template'] = self.model_template
+        dump_data['model_variable'] = self.model_variables
+        dump_data['history']        = self.history
         dump_data = {
             **dump_data,
-            **{
-                "model_template": safe_dict(self.model_template),
-                "model_variable": safe_dict(self.model_variables),
-                "history"       : safe_dict(self.history),
-                                **safe_dict(extra_model_data),
-            }
+            **extra_model_data,
         }
+        dump_data = safe_dict(dump_data)
         with open(path / "model.yaml", "w") as f:
-            yaml.safe_dump(dump_data, f,allow_unicode=True)
+            yaml.safe_dump(dump_data, f,allow_unicode=True, sort_keys=False)
         with open(path / "report.txt", "w") as f:
             f.write(self.short_report())
         self._plot_images(plt, plt.savefig, [path / "history.png"], [path / "cm.png"])
@@ -316,7 +349,7 @@ class ModelContext:
     def report_to_screen(self):
         print(self.short_report())
         print(f"train epoch={self.epoch}")
-        for metric in METRICS:
+        for metric in self.metrics:
             if metric not in self._history:
                 continue
             if hasattr(self, metric):
@@ -334,6 +367,9 @@ class ClassClassifierContext(ModelContext):
     _cm_figsize             = (5, 5)
     _cm_title_fontsize      = 14
     _cm_fontsize            = 12
+    _extra_dump_vars        = (
+        "class_labels",
+    )
 
     def __init__(
         self,
@@ -341,11 +377,13 @@ class ClassClassifierContext(ModelContext):
         model_class         : None,
         optimizer           : None,
         loss                : None,
+        metrics             : list,
         model_template      : list | None = None,
         model_variables     : dict | None = None,
         history             = None,
         test_pred           = None,
         test_accuracy       : float | None = None,
+        test_mae            : float | None = None,
 
         class_labels        : list[str] | None = None,
         cm                  = None,
@@ -355,11 +393,13 @@ class ClassClassifierContext(ModelContext):
             model_class    = model_class,
             optimizer      = optimizer,
             loss           = loss,
+            metrics        = metrics,
             model_template = model_template,
             model_variables = model_variables,
             history        = history,
             test_pred      = test_pred,
             test_accuracy  = test_accuracy,
+            test_mae       = test_mae,
         )
         self.class_labels   = class_labels
         self.cm             = cm
@@ -526,7 +566,7 @@ class ModelHandler():
     def create(self):
         mc = model_create(
             self.model_class,
-            *self.model_template,
+            self.model_template,
             **self.model_variables
         )
         self._model         = mc[S_MODEL]
@@ -554,6 +594,7 @@ class ModelHandler():
         return self.model.predict(data)
 
     def save(self, path):
+        print(f"Saving model state to '{path}'")
         with open(path / "context.pickle", "wb") as f:
             pickle.dump(self._context, f)
         self._model.save(path / "model.keras")
@@ -562,6 +603,7 @@ class ModelHandler():
         self._context.summary_to_disk(path)
 
     def load(self, path, dont_load_model=False):
+        print(f"Loading model state from '{path}'")
         with open(path / "context.pickle", "rb") as f:
             self._context = pickle.load(f)
         if not dont_load_model:
@@ -569,12 +611,14 @@ class ModelHandler():
 
     def update_data(self):
         if self._context.test_pred is None:
-            self._context.test_pred  = self.predict(self.x_test)
+            self._context.test_pred  = self.predict(self.data_provider.x_test)
 
         for m in self._context.metrics:
             if hasattr(self, 'test_'+m):
                 if getattr(self._context, 'test_'+m) is None:
                     setattr(self._context, 'test_'+m, None) # TODO:
+                else:
+                    print(f"WARNING: metric property 'test_{m}' is not implemented, but should be! Do this ASAP!")
 
     def unload_model(self):
         self._model = None
@@ -594,6 +638,7 @@ class ClassClassifierHandler(ModelHandler):
         model_class,
         optimizer,
         loss,
+        metrics         : list | None = None,
         model_template  : list = None,
         model_variables : dict | None = None,
         batch_size      : int = 10,
@@ -605,6 +650,7 @@ class ClassClassifierHandler(ModelHandler):
             model_class,
             optimizer,
             loss,
+            metrics,
             model_template,
             model_variables,
             batch_size,
@@ -632,7 +678,7 @@ class ClassClassifierHandler(ModelHandler):
         super(ClassClassifierHandler, self).update_data()
 
         if self._context.cm is None:
-            self._context.cm = confusion_matrix(np.argmax(self.y_test, axis=1),
+            self._context.cm = confusion_matrix(np.argmax(self.data_provider.y_test, axis=1),
                                 np.argmax(self._context.test_pred, axis=1),
                                 normalize='true')
             self._context.cm = np.around(self._context.cm, self._cm_round)
@@ -856,6 +902,7 @@ if STANDALONE:
             model_class =Sequential,
             optimizer   ="adam",
             loss        ="categorical_crossentropy",
+            metrics     =[S_ACCURACY],
             model_template = [
                 # Список слоев и их параметров
                 layer_template(Embedding,           '$vocab_size', 10, input_length='$chunk_size'),
