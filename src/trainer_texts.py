@@ -3,13 +3,23 @@
 
 try:
     from standalone import STANDALONE
+    IMPORT_ML_KIT = False
 except ImportError:
-    STANDALONE = False
+    try:
+        from ml_kit.src.standalone import STANDALONE
+        IMPORT_ML_KIT = True
+    except ImportError:
+        STANDALONE = False
 
 if STANDALONE:
-    from env import *
-    from helpers import *
-    from trainer_common import *
+    if not IMPORT_ML_KIT:
+        from env import *
+        from helpers import *
+        from trainer_common import *
+    else:
+        from ml_kit.src.env import *
+        from ml_kit.src.helpers import *
+        from ml_kit.src.trainer_common import *
 
 ###
 ENV__TRAIN__DEFAULT_DATA_PATH       = "ENV__TRAIN__DEFAULT_DATA_PATH"
