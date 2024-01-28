@@ -197,20 +197,32 @@ class ModelDummy:
 def layer_template(layer_kind, *args, **kwargs):
     return (layer_kind, args, kwargs)
 
+def subst_vars(value, variables, recurse=False, var_sign="$", raise_error_when_not_found=True):
+    result = value
+    if isinstance(value, str):
+        if value[:len(var_sign)] == var_sign:
+            k = value[len(var_sign):]
+            if k in variables:
+                result = variables[k]
+            elif raise_error_when_not_found:
+                raise KeyError(f"Variable '{k}' was not found within variables!")
+    elif recurse:
+        if isinstance(value, (list, tuple)):
+            result = [subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found) for v in value]
+        elif isinstance(value, dict):
+            result = {
+                subst_vars(k, variables, recurse, var_sign, raise_error_when_not_found) :
+                subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found)
+                for k, v in value.items()
+            }
+    return result
 
 def layer_create(layer_template_data, **variables):
     layer_kind, args, kwargs = layer_template_data
     args = [*args]
     kwargs = {**kwargs}
-    for i in range(len(args)):
-        v = args[i]
-        if isinstance(v, str) and v[:1] == "$":
-            if v[1:] in variables:
-                args[i] = variables[v[1:]]
-    for k, v in kwargs.items():
-        if isinstance(v, str) and v[:1] ==  "$":
-            if v[1:] in variables:
-                kwargs[k] = variables[v[1:]]
+    args = subst_vars(args, variables, recurse=True)
+    kwargs = subst_vars(kwargs, variables, recurse=True)
     if isinstance(layer_kind, str) and layer_kind[:1]=="<" and layer_kind[:-1]==">":
         if ENV[ENV__MODEL__CREATE_AUTOIMPORT]:
             pass # TODO: try to import according to str # NOTE: it's really unsafe but can be used with YAML
@@ -463,6 +475,7 @@ if STANDALONE:
                     layer_template(LayerDummy, "br_2__layer_1", data=201, aux="$lvar1"),
                     layer_template(LayerDummy, "br_2__layer_2", data=202, aux="$in2"),
                     layer_template(LayerDummy, "br_2__layer_3", data=203),
+                    layer_template(LayerDummy, "br_2__layer_4", ["$in1", "$in2"]),
                 ],
                 variables = to_dict(
                     lvar1 = "lvar1_value",
@@ -472,7 +485,7 @@ if STANDALONE:
 
         variables = to_dict(var1="var1_value")
 
-        sequential_model = model_create(ModelDummy, model_branches['branch_1']['layers'], **variables)
+        sequential_model = model_create(ModelDummy, model_branches['in2']['layers'], **variables)
         print(sequential_model)
 
         branched_model   = model_create(ModelDummy, model_branches, **variables)
