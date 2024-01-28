@@ -206,6 +206,8 @@ def subst_vars(value, variables, recurse=False, var_sign="$", raise_error_when_n
                 result = variables[k]
             elif raise_error_when_not_found:
                 raise KeyError(f"Variable '{k}' was not found within variables!")
+            if recurse:
+                result = subst_vars(result, variables, recurse, var_sign, raise_error_when_not_found)
     elif recurse:
         if isinstance(value, (list, tuple)):
             result = [subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found) for v in value]
@@ -476,9 +478,11 @@ if STANDALONE:
                     layer_template(LayerDummy, "br_2__layer_2", data=202, aux="$in2"),
                     layer_template(LayerDummy, "br_2__layer_3", data=203),
                     layer_template(LayerDummy, "br_2__layer_4", ["$in1", "$in2"]),
+                    layer_template(LayerDummy, "br_2__layer_5", ["$lvar2", "$in2"]),
                 ],
                 variables = to_dict(
                     lvar1 = "lvar1_value",
+                    lvar2 = "$in1",
                 )
             )
         )
