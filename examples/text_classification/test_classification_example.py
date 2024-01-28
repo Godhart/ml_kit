@@ -2,10 +2,11 @@
 # Решение задачи
 
 import sys
-import os
 from pathlib import Path
 
-sys.path.insert(0, str((Path(os.curdir).absolute() / ".." / "..").resolve()))
+ml_kit_path = str((Path(__file__).absolute() / ".." / ".." / "..").resolve())
+if ml_kit_path not in sys.path:
+    sys.path.insert(0, ml_kit_path)
 
 try:
     from ml_kit.standalone import STANDALONE

@@ -1,25 +1,21 @@
 ###
 # Text Trainer functions
+import sys
+from pathlib import Path
+
+ml_kit_path = str((Path(__file__).absolute() / ".." / "..").resolve())
+if ml_kit_path not in sys.path:
+    sys.path.insert(0, ml_kit_path)
 
 try:
-    from standalone import STANDALONE
-    IMPORT_ML_KIT = False
+    from ml_kit.standalone import STANDALONE
 except ImportError:
-    try:
-        from ml_kit.standalone import STANDALONE
-        IMPORT_ML_KIT = True
-    except ImportError:
-        STANDALONE = False
+    STANDALONE = False
 
 if STANDALONE:
-    if not IMPORT_ML_KIT:
-        from env import *
-        from helpers import *
-        from trainer_common import *
-    else:
-        from ml_kit.env import *
-        from ml_kit.helpers import *
-        from ml_kit.trainer_common import *
+    from ml_kit.env import *
+    from ml_kit.helpers import *
+    from ml_kit.trainer_common import *
 
 ###
 ENV__TRAIN__DEFAULT_DATA_PATH       = "ENV__TRAIN__DEFAULT_DATA_PATH"
