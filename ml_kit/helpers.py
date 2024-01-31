@@ -21,7 +21,11 @@ import time
 import re
 
 ENV__MODEL__CREATE_AUTOIMPORT = 'ENV__MODEL__CREATE_AUTOIMPORT'
+ENV__MODEL__FALLBACK_ARGS = 'ENV__MODEL__FALLBACK_ARGS'
 ENV[ENV__MODEL__CREATE_AUTOIMPORT] = False
+ENV[ENV__MODEL__FALLBACK_ARGS] = {
+    "<class 'keras.src.layers.regularization.dropout.Dropout'>": {'seed': 1}
+}
 
 S_CHAIN = 'chain'
 S_INPUT = 'input'
@@ -227,6 +231,11 @@ def layer_create(layer_template_data, **variables):
     kwargs = {**kwargs}
     args = subst_vars(args, variables, recurse=True)
     kwargs = subst_vars(kwargs, variables, recurse=True)
+    layer_kind_type = str(type(layer_kind))
+    if layer_kind_type in ENV[ENV__MODEL__FALLBACK_ARGS]:
+        for k, v in ENV[ENV__MODEL__FALLBACK_ARGS][layer_kind_type].items():
+            if k not in kwargs:
+                kwargs[k] = v
     if isinstance(layer_kind, str) and layer_kind[:1]=="<" and layer_kind[:-1]==">":
         if ENV[ENV__MODEL__CREATE_AUTOIMPORT]:
             pass # TODO: try to import according to str # NOTE: it's really unsafe but can be used with YAML
