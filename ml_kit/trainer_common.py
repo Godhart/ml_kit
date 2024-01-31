@@ -27,11 +27,17 @@ from matplotlib import pyplot as plt
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import plot_model
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.model_selection import train_test_split
 
 
 ###
 ENV__MODEL__DATA_ROOT = "ENV__MODEL__DATA_ROOT"
 ENV[ENV__MODEL__DATA_ROOT] = Path("~/ai-learn")
+
+ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT = "ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT"
+ENV__TRAIN__RANDOM_SEED_DEFAULT = "ENV__TRAIN__RANDOM_SEED_DEFAULT"
+ENV[ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT] = True
+ENV[ENV__TRAIN__RANDOM_SEED_DEFAULT] = 1
 
 def connect_gdrive():
     from google.colab import drive
@@ -49,6 +55,9 @@ S_ACCURACY = "accuracy"
 S_MAE = "mae"
 S_LOSS = "loss"
 
+S_CM = "cm"
+S_REGRESSION = "regression"
+
 MAE_MAX = float(2**31-1)
 
 METRICS = [S_ACCURACY, S_MAE, ]
@@ -59,13 +68,84 @@ METRICS_T = {
 }
 
 
+def split_by_idx(source, split, list_conv=None):
+    if not isinstance(split, dict):
+        raise ValueError("'split' should be a dict with mandatory field 'train' and additional fields 'val' and 'test'!")
+    result = {"train": None, "val": None, "test": None}
+    if list_conv is None:
+        list_conv = np.array
+    for field in ("val", "test", "train"):
+        if field not in split:
+            continue
+        if isinstance(source, (list, tuple)):
+            result[field] = list_conv([source[idx] for idx in split[field]])
+        elif isinstance(source, dict):
+            split_data = {}
+            for k, v in source.items():
+                split_data[k] = list_conv([v[idx] for idx in split[field]])
+            result[field] = split_data
+        else:
+            raise ValueError("'split' can be used only with 'source' as list or dict")
+    return result
+
+
 class TrainDataProvider:
     """
     Класс для абстракции источников данных для обучения
     Упрощает написание кода, позволяет избегать ошибок из-за путаницы имен
     """
 
-    def __init__(self,x_train, y_train, x_val, y_val, x_test, y_test, x_order=None, y_order=None,):
+    def __init__(self,
+        x_train : list|dict,
+        y_train : list|dict,
+        x_val   : list|dict|int|float|None,
+        y_val   : list|dict|None,
+        x_test  : list|dict|int|float|None,
+        y_test  : list|dict|None,
+        x_order : list|None=None,
+        y_order : list|None=None,
+        split   : dict|None=None,
+        split_y : bool = True,
+    ):
+        if split is not None:
+            d_split = split_by_idx(x_train, split)
+            if d_split["train"] is not None:
+                x_train = d_split["train"]
+            if d_split["val"] is not None:
+                x_val   = d_split["val"]
+            if d_split["test"] is not None:
+                x_test  = d_split["test"]
+
+            if split_y:
+                d_split = split_by_idx(y_train, split)
+                if d_split["train"] is not None:
+                    y_train = d_split["train"]
+                if d_split["val"] is not None:
+                    y_val   = d_split["val"]
+                if d_split["test"] is not None:
+                    y_test  = d_split["test"]
+        else:
+            if isinstance(x_test, (int, float)):
+                if isinstance(x_test, float):
+                    x_test = 1. - x_test
+                if isinstance(x_val, float):
+                    x_val = x_val / x_test  # balance x_val
+                x_train, x_test, y_train, y_test = train_test_split(
+                    x_train, y_train,
+                    train_size=x_test,
+                    shuffle=ENV[ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT],
+                    random_state=ENV[ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT]
+                )
+            if isinstance(x_val, (int, float)):
+                if isinstance(x_val, float):
+                    x_val = 1. - x_val
+                x_train, x_val, y_train, y_val = train_test_split(
+                    x_train, y_train,
+                    train_size=x_val,
+                    shuffle=ENV[ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT],
+                    random_state=ENV[ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT]
+                )
+
         self._x_train = x_train
         self._y_train = y_train
         self._x_val   = x_val
@@ -209,6 +289,8 @@ class ModelContext:
         metrics             : list,
         model_template      : list | None = None,
         model_variables     : dict | None = None,
+        inputs_order        : list | None = None,
+        reports             : list[str] | None = None,
         history             = None,
         test_pred           = None,
         test_accuracy       : float | None = None,
@@ -221,6 +303,8 @@ class ModelContext:
         self.metrics        = metrics
         self.model_template = model_template
         self.model_variables = model_variables
+        self.inputs_order   = inputs_order
+        self.reports        = reports
         self.history        = history
         self.report_history = None
         self.test_pred      = test_pred
@@ -341,7 +425,7 @@ class ModelContext:
             yaml.safe_dump(dump_data, f,allow_unicode=True, sort_keys=False)
         with open(path / "report.txt", "w") as f:
             f.write(self.short_report())
-        self._plot_images(plt, plt.savefig, [path / "history.png"], [path / "cm.png"])
+        self._plot_images(plt, plt.savefig, [path / "history.png"])
 
     def report_to_screen(self):
         print(self.short_report())
@@ -353,7 +437,7 @@ class ModelContext:
                 print(f"'val_'+{metric} = {getattr(self, metric)}")
             if hasattr(self, 'test_'+metric):
                 print(f"test_{metric} = {getattr(self, 'test_'+metric)}")
-        self._plot_images(plt, plt.show, [], [])
+        self._plot_images(plt, plt.show, [])
 
 
 class ClassClassifierContext(ModelContext):
@@ -377,6 +461,8 @@ class ClassClassifierContext(ModelContext):
         metrics             : list,
         model_template      : list | None = None,
         model_variables     : dict | None = None,
+        inputs_order        : list | None = None,
+        reports             : list[str] | None = None,
         history             = None,
         test_pred           = None,
         test_accuracy       : float | None = None,
@@ -393,6 +479,8 @@ class ClassClassifierContext(ModelContext):
             metrics        = metrics,
             model_template = model_template,
             model_variables = model_variables,
+            inputs_order   = inputs_order,
+            reports        = reports,
             history        = history,
             test_pred      = test_pred,
             test_accuracy  = test_accuracy,
@@ -400,8 +488,9 @@ class ClassClassifierContext(ModelContext):
         )
         self.class_labels   = class_labels
         self.cm             = cm
+        self.reports        = reports or [S_CM]
 
-    def _plot_images(self, plotter, plot_f, plot_hist_args, plot_cm_args):
+    def _plot_cm_images(self, plotter, plot_f, plot_cm_args):
         if self.cm is not None:
             fig, ax = plotter.subplots(figsize=self._cm_figsize)
             ax.set_title(f'Нейросеть {self.name}: матрица ошибок нормализованная', fontsize=self._cm_title_fontsize)
@@ -412,33 +501,37 @@ class ClassClassifierContext(ModelContext):
             plotter.ylabel('Верные классы', fontsize=self._cm_fontsize)
             fig.autofmt_xdate(rotation=45)          # Наклон меток горизонтальной оси при необходимости
             plot_f(*plot_cm_args)
-        super(ClassClassifierContext, self)._plot_images(plotter, plot_f, plot_hist_args)
 
     def short_report(self):
         report_data = {}
         report = []
 
-        if self.cm is None:
-            return "No data, call update_data() first!"
+        if self.cm is None and S_CM in self.reports:
+            report.append["No data for Confusion Matrix! call update_data() first!"]
 
-        # Для каждого класса:
-        for cls in range(len(self.class_labels)):
-            # Определяется индекс класса с максимальным значением предсказания (уверенности)
-            cls_pred = np.argmax(self.cm[cls])
-            # Формируется сообщение о верности или неверности предсказания
-            report_data[self.class_labels[cls]] = {
-                'top_rate'  : 100. * self.cm[cls, cls_pred],
-                'top_class' : self.class_labels[cls_pred],
-                'success'   : cls_pred == cls
-            }
+        if self.cm is not None:
+            # Для каждого класса:
+            for cls in range(len(self.class_labels)):
+                # Определяется индекс класса с максимальным значением предсказания (уверенности)
+                cls_pred = np.argmax(self.cm[cls])
+                # Формируется сообщение о верности или неверности предсказания
+                report_data[self.class_labels[cls]] = {
+                    'top_rate'  : 100. * self.cm[cls, cls_pred],
+                    'top_class' : self.class_labels[cls_pred],
+                    'success'   : cls_pred == cls
+                }
 
-        report.append(('-'*100))
-        report.append(report_from_dict(
-            f'Нейросеть: {self.name}', report_data,
-            'Класс: {:<20} {:3.0f}% сеть отнесла к классу {:<20} - Верно: {}', None
-        ))
-        # Средняя точность распознавания определяется как среднее диагональных элементов матрицы ошибок
-        report.append('\nСредняя точность распознавания: {:3.0f}%'.format(100. * self.cm.diagonal().mean()))
+            report.append(('-'*100))
+            report.append(report_from_dict(
+                f'Нейросеть: {self.name}', report_data,
+                'Класс: {:<20} {:3.0f}% сеть отнесла к классу {:<20} - Верно: {}', None
+            ))
+            # Средняя точность распознавания определяется как среднее диагональных элементов матрицы ошибок
+            report.append('\nСредняя точность распознавания: {:3.0f}%'.format(100. * self.cm.diagonal().mean()))
+
+        if S_REGRESSION in self.reports:
+            pass    # TODO:
+
         return "\n".join(report)
 
     def summary_to_disk(
@@ -450,6 +543,11 @@ class ClassClassifierContext(ModelContext):
             extra_model_data = {}
         extra_model_data['class_labels'] = self.class_labels
         super(ClassClassifierContext, self).summary_to_disk(path, extra_model_data)
+        self._plot_cm_images(plt, plt.savefig, [path / "cm.png"])
+        
+    def report_to_screen(self):
+        super(ClassClassifierContext, self).report_to_screen()
+        self._plot_cm_images(plt, plt.show, [])
 
 
 class ModelHandler():
@@ -468,7 +566,7 @@ class ModelHandler():
         optimizer,
         loss,
         metrics         : list | None = None,
-        model_template  : list = None,
+        model_template  : list | dict = None,
         model_variables : dict | None = None,
         batch_size      : int = 10,
         data_provider   : TrainDataProvider = None,
@@ -481,12 +579,12 @@ class ModelHandler():
             optimizer       = optimizer,
             loss            = loss,
             metrics         = metrics,
+            inputs_order    = None,  
         )
         self.model_template  = model_template
         self.model_variables = model_variables
         self.batch_size      = batch_size
         self._model          = None
-        self._inputs_order   = None
         self.data_provider   = data_provider
 
     @property
@@ -518,7 +616,12 @@ class ModelHandler():
         if value is None:
             self._context.model_template = []
         else:
-            self._context.model_template = tuple(copy.deepcopy(list(value)))
+            if isinstance(value, (list,tuple)):
+                self._context.model_template = tuple(copy.deepcopy(list(value)))
+            elif isinstance(value, dict):
+                self._context.model_template = copy.deepcopy(value)
+            else:
+                raise ValueError("'model_template' should be a list, tuple or a dict!")
 
     @property
     def model_variables(self):
@@ -534,6 +637,10 @@ class ModelHandler():
     @property
     def model(self):
         return self._model
+
+    @property
+    def inputs_order(self):
+        return self._context.inputs_order
 
     @property
     def metrics(self):
@@ -567,19 +674,29 @@ class ModelHandler():
             **self.model_variables
         )
         self._model         = mc[S_MODEL]
-        self._inputs_order  = mc[S_INPUTS]
+        self._context.inputs_order  = mc[S_INPUTS]
+        if isinstance(self.context.optimizer, (list, tuple)):
+            optimizer = self.context.optimizer[0](*self.context.optimizer[1], **self.context.optimizer[2])
+        elif callable(self.context.optimizer):
+            optimizer = self.context.optimizer()
+        else:
+            optimizer = self.context.optimizer
         self._model.compile(
-            optimizer=self.context.optimizer,
+            optimizer=optimizer,
             loss=self.context.loss,
             metrics=self.context.metrics,
         )
 
-    def fit(self, epochs):
+    def fit(self, epochs, initial_epoch=None):
+        kwargs = {}
+        if initial_epoch is not None:
+            kwargs['initial_epoch'] = initial_epoch
         self.history = self.model.fit(
             self.data_provider.x_train, self.data_provider.y_train,
             batch_size=self.batch_size,
             epochs=epochs,
             validation_data=(self.data_provider.x_val, self.data_provider.y_val),
+            **kwargs,
         ).history
         self._context.test_pred = None
         for m in self._context.metrics:
@@ -666,8 +783,8 @@ class ClassClassifierHandler(ModelHandler):
         else:
             self._context.class_labels = tuple(copy.deepcopy(list(value)))
 
-    def fit(self, epochs):
-        result = super(ClassClassifierHandler, self).fit(epochs)
+    def fit(self, epochs, initial_epoch=None):
+        result = super(ClassClassifierHandler, self).fit(epochs, initial_epoch=initial_epoch)
         self._context.cm = None
         return result
 
@@ -697,12 +814,14 @@ class TrainHandler:
         data_path   : Path | str,
         data_name   : Path | str,
         mhd         : ModelHandler | None,
-        mhd_class   = ModelHandler
+        mhd_class   = ModelHandler,
+        on_model_update = None,
     ):
         self._data_path = data_path
         self.data_name = data_name
         self.mhd = mhd
         self._mhd_class = mhd_class
+        self.on_model_update = on_model_update
 
     @property
     def data_path(self):
@@ -855,6 +974,9 @@ class TrainHandler:
         else:
             if best.is_saved(S_BEST):
                 best.load(S_BEST, dont_load_model=True)
+                
+        if self.on_model_update is not None:
+            self.on_model_update(self)
 
         if  self.mhd.context.epoch < epochs and self.mhd.context.accuracy < target_accuracy:
             display_callback(f"Starting to train from epoch {self.mhd.context.epoch}, accuracy: {self.mhd.context.accuracy}"
@@ -867,7 +989,12 @@ class TrainHandler:
             while self.mhd.context.epoch < epochs and not enough:
                 save_result = True
                 display_callback(f"Epoch/Accuracy: current - {self.mhd.context.epoch}/{self.mhd.context.accuracy}, best - {best.mhd.context.epoch}/{best.mhd.context.accuracy}")
-                self.mhd.fit(epochs=train_step)   # would affect .epoch and .accuracy fields
+                if self.mhd.context.epoch > 0:
+                    pass # TODO: initial_epoch = self.mhd.context.epoch  # TODO: +1?
+                else:
+                    initial_epoch = None
+                self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch)
+                # fit() would affect .epoch and .accuracy fields
 
                 if best.mhd.context.accuracy <= 0 \
                 or self.mhd.context.accuracy > best.mhd.context.accuracy + 0.01:
@@ -881,6 +1008,7 @@ class TrainHandler:
                     next_save += save_step
 
                 if self.mhd.context.accuracy >= target_accuracy:
+                    # TODO: check accuracy on test_data
                     enough = True
                     break
 
