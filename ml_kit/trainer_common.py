@@ -988,19 +988,39 @@ class TrainHandler:
             save_result = False # by default don't save if not trained
             while self.mhd.context.epoch < epochs and not enough:
                 save_result = True
-                display_callback(f"Epoch/Accuracy: current - {self.mhd.context.epoch}/{self.mhd.context.accuracy}, best - {best.mhd.context.epoch}/{best.mhd.context.accuracy}")
+                
+                display_metrics = []
+                current_metrics = []
+                best_metrics = []
+                for metric in self.mhd.context.metrics:
+                    display_metrics.append(metric)
+                    current_metrics.append(str(getattr(self.mhd.context, metric)))
+                    best_metrics.append(str(getattr(best.mhd.context, metric)))
+                
+                display_callback(
+                    f"epoch/{'/'.join(display_metrics)}: "
+                    f"current - {self.mhd.context.epoch}/{'/'.join(current_metrics)}, "
+                    f"best - {best.mhd.context.epoch}/{'/'.join(best_metrics)}"
+                )
                 if self.mhd.context.epoch > 0:
                     initial_epoch = None # TODO: initial_epoch = self.mhd.context.epoch  # TODO: +1?
                 else:
                     initial_epoch = None
                 self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch)
-                # fit() would affect .epoch and .accuracy fields
+                # NOTE: fit() would affect .epoch, .accuracy and other metrics fields
 
-                if best.mhd.context.accuracy <= 0 \
-                or self.mhd.context.accuracy > best.mhd.context.accuracy + 0.01:
-                    self.mhd.update_data()
-                    self.save(S_BEST)
-                    best.mhd.context.history = copy.deepcopy(self.mhd.context.history)
+                if "accuracy" in self.mhd.context.metrics:
+                    if best.mhd.context.accuracy <= 0 \
+                    or self.mhd.context.accuracy > best.mhd.context.accuracy + 0.01:
+                        self.mhd.update_data()
+                        self.save(S_BEST)
+                        best.mhd.context.history = copy.deepcopy(self.mhd.context.history)
+                if "mae" in self.mhd.context.metrics:
+                    if best.mhd.context.mae >= MAE_MAX \
+                    or self.mhd.context.mae < best.mhd.context.mae:
+                        self.mhd.update_data()
+                        self.save(S_BEST)
+                        best.mhd.context.history = copy.deepcopy(self.mhd.context.history)
 
                 if self.mhd.context.epoch == next_save:
                     self.mhd.update_data()
