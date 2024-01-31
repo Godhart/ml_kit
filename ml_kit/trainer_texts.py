@@ -343,15 +343,24 @@ class TextTrainDataProvider(TrainDataProvider):
 
     @property
     def classes(self):
-        return self._texts.classes
+        if isinstance(self._texts, TrainTextsClassified):
+            return self._texts.classes
+        else:
+            return None
 
     @property
     def classes_labels(self):
-        return self._texts.classes_labels
+        if isinstance(self._texts, TrainTextsClassified):
+            return self._texts.classes_labels
+        else:
+            return None
 
     @property
     def classes_ids(self):
-        return self._texts.classes_ids
+        if isinstance(self._texts, TrainTextsClassified):
+            return self._texts.classes_ids
+        else:
+            return None
 
     @property
     def vocab_size(self):
