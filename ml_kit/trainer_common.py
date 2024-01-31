@@ -990,7 +990,7 @@ class TrainHandler:
                 save_result = True
                 display_callback(f"Epoch/Accuracy: current - {self.mhd.context.epoch}/{self.mhd.context.accuracy}, best - {best.mhd.context.epoch}/{best.mhd.context.accuracy}")
                 if self.mhd.context.epoch > 0:
-                    pass # TODO: initial_epoch = self.mhd.context.epoch  # TODO: +1?
+                    initial_epoch = None # TODO: initial_epoch = self.mhd.context.epoch  # TODO: +1?
                 else:
                     initial_epoch = None
                 self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch)
