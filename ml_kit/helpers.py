@@ -407,7 +407,7 @@ def model_create(model_class, templates, **variables):
             return [k for k in branches if S_CHAIN not in branches[k]]
 
         incomplete_branches = _incomplete_branches(branches)
-        branch_output = {}
+        created_branches = {}
         while len(incomplete_branches) > 0:
             for k in incomplete_branches:
                 if k not in inputs:
@@ -423,11 +423,11 @@ def model_create(model_class, templates, **variables):
                     branch_vars = {**variables, **v['variables']}
                 else:
                     branch_vars = variables
-                overlapping = [k for k in branch_output if k in branch_vars]
+                overlapping = [k for k in created_branches if k in branch_vars]
                 if len(overlapping) > 0:
                     raise ValueError(f"Error creating branch {k}: existing branches ({overlapping}) are overlapping with variables!")
-                branch_vars = {**branch_vars, **branch_output}
-                if k in inputs:
+                branch_vars = {**branch_vars, **created_branches}
+                if len(v[S_PARENTS])==0 or k in inputs:
                     parents = None
                 else:
                     parents = branches[v[S_PARENTS][0]][S_CHAIN][-1]
@@ -435,7 +435,7 @@ def model_create(model_class, templates, **variables):
                     parents,
                     *v[S_LAYERS],
                     **branch_vars)
-                branch_output[k] = branches[k][S_CHAIN][-1]
+                created_branches[k] = branches[k][S_CHAIN][-1]
 
             prev_incomplete = incomplete_branches
             incomplete_branches = _incomplete_branches(branches)
@@ -445,7 +445,7 @@ def model_create(model_class, templates, **variables):
                     f"Those branches can't be created (check for circular references): {incomplete_branches}!"
                     f" {[line_break + k + ': [' + ', '.join([kk for kk in branches[k][S_PARENTS]  if S_CHAIN not in branches[k][S_PARENTS]] + [kk for kk in branches[k][S_IPARENTS] if S_CHAIN not in branches[k][S_IPARENTS]]) for k in incomplete_branches]}]"
                     )
-        model = model_class([branches[k][S_CHAIN][0] for k in inputs], outputs[0])
+        model = model_class([branches[k][S_CHAIN][0] for k in inputs], branches[outputs[0]][S_CHAIN][-1])
 
     return {S_MODEL: model, S_INPUTS: inputs}
 
