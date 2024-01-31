@@ -71,7 +71,7 @@ if True or STANDALONE:
     texts = load_texts_from_dir(ENV[ENV__TEXTS__TRAIN_TEXTS_PATH], ENV[ENV__TEXTS__TRAIN_TEXTS_NAME_REGEX], ENV[ENV__TEXTS__TRAIN_TEXTS_SUBSETS])
 # т.к. тексты уже загружены - привести к нужному формату
 else:
-    texts = TrainTexts(CLASS_LIST, text_train, text_test)
+    texts = TrainTextsClassified(CLASS_LIST, text_train, text_test)
 
 # Шаблоны моделей для обучения
 models = to_dict(
