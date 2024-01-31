@@ -82,16 +82,16 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 ################################################################################
 #
 
-class TrainTexts:
+class TrainTextsClassified:
     """
     Содержит тексты для обучения и информацию о них
-        classes_list    : список классов,
-        text_train      : список списков обучающей выборки.
-                            1-е измерение - индекс класса,
-                            2-е измерение - в каждом элементе данные одного из файлов
-        text_test       : список списков тестовой выборки.
-                            1-е измерение - индекс класса,
-                            2-е измерение - в каждом элементе данные одного из файлов
+        classes_list    : список классов состоящий из пар значений,
+                            1-е значение - индекс класса
+                            2-е значение - метка класса
+        text_train      : список текстов обучающей выборки.
+                            в каждом элементе данные для соответствующего класса
+        text_test       : список текстов тестовой выборки.
+                            в каждом элементе данные для соответствующего класса
     """
 
     def __init__(self, classes, train, test):
@@ -118,7 +118,7 @@ def load_texts_from_dir(path, regex=('\((.+)\) (\S+)_', 0, 1), subsets=('обу�
 
     subsets задаёт названия наборов для обучающей и тестовой выборки
 
-    Возвращает TrainTexts
+    Возвращает TrainTextsClassified
     """
     path = Path(path)
     classes_list = []
@@ -165,7 +165,7 @@ def load_texts_from_dir(path, regex=('\((.+)\) (\S+)_', 0, 1), subsets=('обу�
     for i in range(len(classes_list)):
         classes.append((i, classes_list[i]))
 
-    result = TrainTexts(
+    result = TrainTextsClassified(
         classes = classes,
         train   = [flat_text(item) for item in text_train],
         test    = [flat_text(item) for item in text_test],
@@ -269,6 +269,11 @@ def prepare_long_texts(texts, classes, chunk_size, chunks_step):
     return np.array(x), np.array(y)
 
 
+def prepare_texts_dummy(x_sequences, y_data):
+    # TODO: x_sequences to np.array()
+    return x_sequences, y_data
+
+
 class TextTrainDataProvider(TrainDataProvider):
     """
     Помогатор обучения на длинных текстах
@@ -279,7 +284,15 @@ class TextTrainDataProvider(TrainDataProvider):
     """
 
     def __init__(
-        self, texts:TrainTexts, vocab_size:int, chunk_size:int, chunk_step:int, bow_used:bool=False, debug:bool=False,
+        self,
+        texts: TrainDataProvider | TrainTextsClassified,
+        vocab_size:int,
+        chunk_size:int,     # NOTE: used when text_prepare_function=prepare_long_texts
+        chunk_step:int,     # NOTE: used when text_prepare_function=prepare_long_texts
+        bow_used:bool=False,
+        bow_default:bool=False,
+        debug:bool=False,
+        text_prepare_function=None,
     ):
         super(TextTrainDataProvider, self).__init__(
             x_train = None,
@@ -289,18 +302,29 @@ class TextTrainDataProvider(TrainDataProvider):
             x_test  = None,
             y_test  = None,
         )
+        if not isinstance(texts, (TrainDataProvider, TrainTextsClassified)):
+            raise ValueError("'texts' should be an instance of TrainDataProvider, TrainTextsClassified!")
         self._texts = texts
         self._vocab_size = vocab_size
         self._chunk_size = chunk_size
         self._chunk_step = chunk_step
-        self._bow_used = bow_used
+        self._bow_used = bow_used or bow_default
+        self._bow_default = bow_default
         self._debug = debug
+        if text_prepare_function is not None:
+            self._text_prepare_function = text_prepare_function
+        else:
+            if isinstance(texts, TrainTextsClassified):
+                self._text_prepare_function = prepare_long_texts
+            else:
+                raise ValueError("Define 'text_prepare_function' as it can't determined automatically q")
+
         self._prepare()
-        
+
     @property
     def x_order(self):
         return None
-    
+
     @x_order.setter
     def x_order(self, value):
         if value is not None:
@@ -309,7 +333,7 @@ class TextTrainDataProvider(TrainDataProvider):
     @property
     def y_order(self):
         return None
-    
+
     @x_order.setter
     def y_order(self, value):
         if value is not None:
@@ -336,7 +360,12 @@ class TextTrainDataProvider(TrainDataProvider):
         return self._tokenizer
 
     def _prepare(self):
-        self._tokenizer = prepare_tokenizer(self._texts.train, self._vocab_size)
+        if isinstance(self._texts, TrainTextsClassified):
+            self._tokenizer = prepare_tokenizer(self._texts.train, self._vocab_size)
+        elif isinstance(self._texts, TrainDataProvider):
+            self._tokenizer = prepare_tokenizer(self._texts.x_train, self._vocab_size)
+        else:
+            assert False, "Shouldn't be here!"
 
         if self._debug:
             # Построение словаря в виде пар слово - индекс
@@ -349,58 +378,209 @@ class TextTrainDataProvider(TrainDataProvider):
             # и векторы bag of words будут учтены только первые num_words слов
             print("Размер словаря", len(items))
 
-        self._seq_train = words_to_tokens(self._texts.train, self._tokenizer)
-        self._seq_test  = words_to_tokens(self._texts.test,  self._tokenizer)
+        if isinstance(self._texts, TrainTextsClassified):
+            self._seq_train = words_to_tokens(self._texts.train,    self._tokenizer)
+            self._seq_test  = words_to_tokens(self._texts.test,     self._tokenizer)
+            self._seq_val = None
+        elif isinstance(self._texts, TrainDataProvider):
+            self._seq_train = words_to_tokens(self._texts.x_train,  self._tokenizer)
+            if self._texts._x_test is not None:
+                self._seq_test = words_to_tokens(self._texts.x_test,   self._tokenizer)
+            else:
+                self._seq_test = None
+            if self._texts._x_val is not None:
+                self._seq_val = words_to_tokens(self._texts.x_val,    self._tokenizer)
+            else:
+                self._seq_val = None
+        else:
+            assert False, "Shouldn't be here!"
 
         if self._debug:
             print("Фрагмент обучающего текста:")
-            print("В виде оригинального текста:              ", self._texts.train[1][:101])
-            print("Он же в виде последовательности индексов: ", self._seq_train[1][:20])
+            if isinstance(self._texts, TrainTextsClassified):
+                print("В виде оригинального текста:              ", self._texts.train[0][:101])
+            elif isinstance(self._texts, TrainDataProvider):
+                print("В виде оригинального текста:              ", self._texts.x_train[0][:101])
+            print("Он же в виде последовательности индексов: ", self._seq_train[0][:20])
 
         with timex("Преобразование текста в обучающие последовательности"):
-            self._x_train, self._y_train = prepare_long_texts(
-                self._seq_train, self._texts.classes, self._chunk_size, self._chunk_step)
+            if self._text_prepare_function == prepare_long_texts:
+                if isinstance(self._texts, TrainTextsClassified):
+                    self._x_train, self._y_train = prepare_long_texts(
+                        self._seq_train,
+                        self._texts.classes,
+                        self._chunk_size,
+                        self._chunk_step
+                    )
+                else:
+                    raise NotImplementedError("don't know (yet) how to match prepare_long_texts with anything but TrainTextsClassified")
+            else:
+                if isinstance(self._texts, TrainDataProvider):
+                    self._x_train, self._y_train = self._text_prepare_function(
+                        x_sequences = self._seq_train,
+                        y_data = self._texts.y_train,
+                    )
+                elif isinstance(self._texts, TrainTextsClassified):
+                    self._x_train, self._y_train = self._text_prepare_function(
+                        x_sequences = self._seq_train,
+                        y_data = self._texts.classes
+                    )
+                else:
+                    assert False, "Shouldn't be here!"
 
-            self._x_test, self._y_test = prepare_long_texts(
-                self._seq_test, self._texts.classes, self._chunk_size, self._chunk_step)
-            
-            # TODO: now test and validation data are the same
-            self._x_val = self._x_test
-            self._y_val = self._y_test
+            if self._seq_test is None:
+                self._x_test = None
+                self._y_test = None
+            if self._text_prepare_function == prepare_long_texts:
+                if isinstance(self._texts, TrainTextsClassified):
+                    self._x_test, self._y_test = prepare_long_texts(
+                        self._seq_test,
+                        self._texts.classes,
+                        self._chunk_size,
+                        self._chunk_step
+                    )
+                else:
+                    raise NotImplementedError("don't know (yet) how to match prepare_long_texts with anything but TrainTextsClassified")
+            else:
+                if isinstance(self._texts, TrainDataProvider):
+                    self._x_test, self._y_test = self._text_prepare_function(
+                        x_sequences = self._seq_test,
+                        y_data = self._texts.y_test,
+                    )
+                elif isinstance(self._texts, TrainTextsClassified):
+                    self._x_test, self._y_test = self._text_prepare_function(
+                        x_sequences = self._seq_test,
+                        y_data = self._texts.classes
+                    )
+                else:
+                    assert False, "Shouldn't be here!"
 
-        if self._debug:
+            if self._seq_val is None:
+                self._x_val = self._x_test
+                self._y_val = self._y_test
+            elif self._text_prepare_function == prepare_long_texts:
+                if isinstance(self._texts, TrainTextsClassified):
+                    self._x_val, self._y_val = prepare_long_texts(
+                        self._seq_val,
+                        self._texts.classes,
+                        self._chunk_size,
+                        self._chunk_step
+                    )
+                else:
+                    raise NotImplementedError("don't know (yet) how to match prepare_long_texts with anything but TrainTextsClassified")
+            else:
+                if isinstance(self._texts, TrainDataProvider):
+                    self._x_val, self._y_val = self._text_prepare_function(
+                        x_sequences = self._seq_val,
+                        y_data = self._texts.y_val,
+                    )
+                elif isinstance(self._texts, TrainTextsClassified):
+                    self._x_val, self._y_val = self._text_prepare_function(
+                        x_sequences = self._seq_val,
+                        y_data = self._texts.classes
+                    )
+                else:
+                    assert False, "Shouldn't be here!"
+
+        if False and self._debug:
             # Проверка формы сформированных данных
             print("x_train.shape=", self._x_train.shape, " y_train.shape=", self._y_train.shape)
-            print("x_test.shape =", self._x_test.shape,  " y_test.shape =", self._y_test.shape)
+            if self._x_test is not None:
+                print("x_test.shape =", self._x_test.shape,  " y_test.shape =", self._y_test.shape)
             # Вывод отрезка индексов тренировочной выборки
             print("Отрезок индексов тренировочной выборки", self.x_train[0])
 
         if self._bow_used:
             with timex("Преобразование последовательностей в bow"):
                 # На входе .sequences_to_matrix() ожидает список, .tolist() выполняет преобразование типа
-                self.x_train_bow = tokens_to_bow(self._x_train.tolist(), self._tokenizer)
-                self.x_test_bow  = tokens_to_bow(self._x_test.tolist(), self._tokenizer)
-                self.x_val_bow   = tokens_to_bow(self._x_val.tolist(), self._tokenizer)
+                if not isinstance(self._x_train, list):
+                    tokens = self._x_train.tolist()
+                else:
+                    tokens = self._x_train
+                self._x_train_bow       = tokens_to_bow(tokens, self._tokenizer)
+
+                if self._x_test is not None:
+                    if not isinstance(self._x_test, list):
+                        tokens = self._x_test.tolist()
+                    else:
+                        tokens = self._x_test
+                    self._x_test_bow    = tokens_to_bow(tokens, self._tokenizer)
+                else:
+                    self._x_test_bow = None
+
+                if self._x_val is not None:
+                    if not isinstance(self._x_val, list):
+                        tokens = self._x_val.tolist()
+                    else:
+                        tokens = self._x_val
+                    self._x_val_bow     = tokens_to_bow(self._x_val.tolist(), self._tokenizer)
+                else:
+                    self._x_val_bow = None
 
             if self._debug:
                 # Вывод формы обучающей выборки в виде разреженной матрицы Bag of Words
-                print("x_train_bow.shape=", self.x_train_bow.shape)
+                print("x_train_bow.shape=", self._x_train_bow.shape)
                 # Вывод фрагмента отрезка обучающего текста в виде Bag of Words
-                print("Фрагмент отрезка обучающего текста в виде Bag of Words", self.x_train_bow[0][0:100])
+                print("Фрагмент отрезка обучающего текста в виде Bag of Words", self._x_train_bow[0][0:100])
             else:
-                self.x_train_bow = None
-                self.x_test_bow = None
-                self.x_val_bow = None
+                self._x_train_bow = None
+                self._x_test_bow = None
+                self._x_val_bow = None
+
+    @property
+    def x_train(self):
+        if self._bow_default:
+            return self.x_train_bow
+        else:
+            return self.x_train_seq
+
+    @property
+    def x_val(self):
+        if self._bow_default:
+            return self.x_val_bow
+        else:
+            return self.x_val_seq
+
+    @property
+    def x_test(self):
+        if self._bow_default:
+            return self.x_test_bow
+        else:
+            return self.x_test_seq
+
+    @property
+    def x_train_seq(self):
+        return self._x_train
+
+    @property
+    def x_val_seq(self):
+        return self._x_val
+
+    @property
+    def x_test_seq(self):
+        return self._x_test
+
+    @property
+    def x_train_bow(self):
+        return self._x_train_bow
+
+    @property
+    def x_val_bow(self):
+        return self._x_val_bow
+
+    @property
+    def x_test_bow(self):
+        return self._x_test_bow
 
     def bow_all_as_tuple(self):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return (
-            self.x_train_bow,
+            self._x_train_bow,
             self._y_train,
-            self.x_val_bow,
+            self._x_val_bow,
             self._y_val,
-            self.x_test_bow,
+            self._x_test_bow,
             self._y_test,
         )
 
@@ -408,9 +588,9 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return (
-            self.x_train_bow,
+            self._x_train_bow,
             self._y_train,
-            self.x_val_bow,
+            self._x_val_bow,
             self._y_val,
         )
 
@@ -418,7 +598,7 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return (
-            self.x_train_bow,
+            self._x_train_bow,
             self._y_train,
         )
 
@@ -426,7 +606,7 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return (
-            self.x_val_bow,
+            self._x_val_bow,
             self._y_val,
         )
 
@@ -434,7 +614,7 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return (
-            self.x_test_bow,
+            self._x_test_bow,
             self._y_test,
         )
 
@@ -442,11 +622,11 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return {
-            "x_train"   : self.x_train_bow,
+            "x_train"   : self._x_train_bow,
             "y_train"   : self._y_train,
-            "x_val"     : self.x_val_bow,
+            "x_val"     : self._x_val_bow,
             "y_val"     : self._y_val,
-            "x_test"    : self.x_test_bow,
+            "x_test"    : self._x_test_bow,
             "y_test"    : self._y_test,
         }
 
@@ -454,11 +634,11 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return {
-            "x_train"   : self.x_train_bow,
+            "x_train"   : self._x_train_bow,
             "y_train"   : self._y_train,
-            "x_val"     : self.x_val_bow,
+            "x_val"     : self._x_val_bow,
             "y_val"     : self._y_val,
-            "x_test"    : self.x_test_bow,
+            "x_test"    : self._x_test_bow,
             "y_test"    : self._y_test,
         }
 
@@ -466,9 +646,9 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return {
-            "x_train"   : self.x_train_bow,
+            "x_train"   : self._x_train_bow,
             "y_train"   : self._y_train,
-            "x_val"     : self.x_val_bow,
+            "x_val"     : self._x_val_bow,
             "y_val"     : self._y_val,
         }
 
@@ -476,7 +656,7 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return {
-            "x_train"   : self.x_train_bow,
+            "x_train"   : self._x_train_bow,
             "y_train"   : self._y_train,
         }
 
@@ -484,7 +664,7 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return {
-            "x_val"     : self.x_val_bow,
+            "x_val"     : self._x_val_bow,
             "y_val"     : self._y_val,
         }
 
@@ -492,7 +672,7 @@ class TextTrainDataProvider(TrainDataProvider):
         if not self._bow_used:
             raise ValueError("No BOW data!")
         return {
-            "x_test"    : self.x_test_bow,
+            "x_test"    : self._x_test_bow,
             "y_test"    : self._y_test,
         }
 
