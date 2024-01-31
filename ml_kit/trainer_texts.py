@@ -289,6 +289,7 @@ class TextTrainDataProvider(TrainDataProvider):
         vocab_size:int,
         chunk_size:int,     # NOTE: used when text_prepare_function=prepare_long_texts
         chunk_step:int,     # NOTE: used when text_prepare_function=prepare_long_texts
+        seq_used:bool=True,
         bow_used:bool=False,
         bow_default:bool=False,
         debug:bool=False,
@@ -308,8 +309,9 @@ class TextTrainDataProvider(TrainDataProvider):
         self._vocab_size = vocab_size
         self._chunk_size = chunk_size
         self._chunk_step = chunk_step
-        self._bow_used = bow_used or bow_default
-        self._bow_default = bow_default
+        self._seq_used = seq_used
+        self._bow_used = bow_used or bow_default or not seq_used
+        self._bow_default = bow_default or not seq_used
         self._debug = debug
         if text_prepare_function is not None:
             self._text_prepare_function = text_prepare_function
@@ -526,6 +528,15 @@ class TextTrainDataProvider(TrainDataProvider):
                 self._x_train_bow = None
                 self._x_test_bow = None
                 self._x_val_bow = None
+                
+        if not self._seq_train:
+            # Save some RAM if sequences aren't required
+            self._seq_train = None
+            self._seq_val = None
+            self._seq_test = None
+        
+        # Save a bit more RAM since tokenizer isn't required anymore
+        self._tokenizer = None
 
     @property
     def x_train(self):
