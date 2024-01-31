@@ -723,8 +723,8 @@ class ModelHandler():
         if not dont_load_model:
             self._model = load_model(path / "model.keras")
 
-    def update_data(self):
-        if self._context.test_pred is None:
+    def update_data(self, force=False):
+        if self._context.test_pred is None or force:
             self._context.test_pred  = self.predict(self.data_provider.x_test)
 
         for m in self._context.metrics:
