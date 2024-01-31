@@ -197,24 +197,26 @@ class ModelDummy:
 def layer_template(layer_kind, *args, **kwargs):
     return (layer_kind, args, kwargs)
 
-def subst_vars(value, variables, recurse=False, var_sign="$", raise_error_when_not_found=True):
+def subst_vars(value, variables, recurse=False, var_sign="$", raise_error_when_not_found=True, nested=False):
     result = value
     if isinstance(value, str):
         if value[:len(var_sign)] == var_sign:
-            k = value[len(var_sign):]
+            k = value[len(var_sign):]   # TODO: regex matching for var_sign{(\w+)}
             if k in variables:
                 result = variables[k]
+                if recurse:
+                    result = subst_vars(result, variables, recurse, var_sign, raise_error_when_not_found, nested=True)
             elif raise_error_when_not_found:
                 raise KeyError(f"Variable '{k}' was not found within variables!")
-            if recurse:
-                result = subst_vars(result, variables, recurse, var_sign, raise_error_when_not_found)
-    elif recurse:
-        if isinstance(value, (list, tuple)):
-            result = [subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found) for v in value]
+    elif recurse or not nested:
+        if isinstance(value, list):
+            result = [subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found, nested=True) for v in value]
+        elif isinstance(value, tuple):
+            result = (subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found, nested=True) for v in value)
         elif isinstance(value, dict):
             result = {
-                subst_vars(k, variables, recurse, var_sign, raise_error_when_not_found) :
-                subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found)
+                subst_vars(k, variables, recurse, var_sign, raise_error_when_not_found, nested=True) :
+                subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found, nested=True)
                 for k, v in value.items()
             }
     return result
