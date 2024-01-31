@@ -434,7 +434,7 @@ class ModelContext:
             if metric not in self._history:
                 continue
             if hasattr(self, metric):
-                print(f"'val_+{metric}' = {getattr(self, metric)}")
+                print(f"'val_{metric}' = {getattr(self, metric)}")
             if hasattr(self, 'test_'+metric):
                 print(f"test_{metric} = {getattr(self, 'test_'+metric)}")
         self._plot_images(plt, plt.show, [])
