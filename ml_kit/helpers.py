@@ -243,16 +243,26 @@ def _create_layers_chain(parent, *layers, **variables):
         layers_chain.append(parent)
     return layers_chain
 
+def _lookup_vars(value, result:list[str], lookup_vars:dict):
+    if isinstance(value, (list, tuple)):
+        for v in value:
+            _lookup_vars(v, result, lookup_vars)
+    if isinstance(value, (dict)):
+        for v in list(value.keys()) + (value.values()):
+            _lookup_vars(v, result, lookup_vars)
+    else:
+        if isinstance(value, str) and value in lookup_vars:
+            if value[1:] not in result:
+                result.append(value[1:])
 
-def _get_iparents(templates, layers):
+def _get_iparents(templates, layers:list[str]):
     result = []
     lookup_vars = ["$"+k for k in layers]
     for _, args, kwargs in templates:
         for var_name in lookup_vars:
             if var_name in result:
                 continue
-            if var_name in args or var_name in kwargs.values():
-                result.append(var_name[1:])
+            _lookup_vars(list(args) + list(kwargs.values()), result, lookup_vars)
     return result
 
 
