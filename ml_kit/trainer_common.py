@@ -77,15 +77,13 @@ def split_by_idx(source, split, list_conv=None):
     for field in ("val", "test", "train"):
         if field not in split:
             continue
-        if isinstance(source, (list, tuple)):
-            result[field] = list_conv([source[idx] for idx in split[field]])
-        elif isinstance(source, dict):
+        if isinstance(source, dict):
             split_data = {}
             for k, v in source.items():
                 split_data[k] = list_conv([v[idx] for idx in split[field]])
             result[field] = split_data
         else:
-            raise ValueError("'split' can be used only with 'source' as list or dict")
+            result[field] = list_conv([source[idx] for idx in split[field]])
     return result
 
 
