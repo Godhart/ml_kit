@@ -1,3 +1,5 @@
+# Этот пример в google_colab можно посмотреть по ссылке https://colab.research.google.com/drive/1rDt2NGAUu4h5z40lmaQTq2KEXUXzdln2
+
 # Работа с массивами данных
 import numpy as np
 
@@ -341,19 +343,21 @@ def extract_row_data(row):
 def construct_train_data(row_list):
     x_data = []
     y_data = []
+    rows = []
 
     for row in row_list:
         x, y = extract_row_data(row)
         if y[0] > 0:                      # Данные добавляются, только если есть зарплата
             x_data.append(x)
             y_data.append(y)
+            rows.append(row)
 
-    return np.array(x_data), np.array(y_data)
+    return np.array(x_data), np.array(y_data), rows
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
-# Формирование выборки из загруженного набора данных
-x_data, y_data = construct_train_data(df.values)
+# Формирование ПРАВИЛЬНОЙ выборки из загруженного набора данных
+x_data, y_data, new_data_rows = construct_train_data(df.values)
 
 # Извлечение текстов об опыте работы для выборки
 prof_texts = extract_prof_text(df.values)
@@ -362,18 +366,6 @@ prof_texts = extract_prof_text(df.values)
 exp_texts = extract_exp_text(df.values)
 
 # -------------------------------------------------------------------------------------------------------------------- #
-
-# Форма наборов параметров и зарплат
-print(f"x_data shape: {x_data.shape}")
-print(f"y_data shape: {y_data.shape}")
-
-# Пример обработанных данных
-n = 0
-print(f"x_data[{n}] : {x_data[n]}")
-print(f"y_data[{n}] : {y_data[n]}")
-
-# -------------------------------------------------------------------------------------------------------------------- #
-
 
 # Исходные данные для примеров
 print(df.values[120])
@@ -384,66 +376,297 @@ print(prof_texts[120])
 # Пример текста об опыте работы из резюме
 print(exp_texts[120])
 
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# Если старые наборы данных не подгружены - объявить переменные
+
+if "y_train" not in locals():
+    y_train = None
+
+if "x_train_01" not in locals():
+    x_train_01 = None
+    
+if "old_data_rows" not in locals():
+    old_data_rows = None
 
 # -------------------------------------------------------------------------------------------------------------------- #
+
+if x_train_01 is not None:
+  # Форма наборов параметров и зарплат
+  print(f"="*80)
+  print(f"Старые данные обучения")
+  print(f"x_train_01 shape: {x_train_01.shape}")
+  print(f"y_train    shape: {y_train.shape}")
+
+  # Пример обработанных данных
+  n = 0
+  print(f"x_train_01[{n}] : {x_train_01[n]}")
+  print(f"y_train[{n}]    : {y_train[n]}")
+
+
+if True:
+  print(f"="*80)
+  print(f"Новые данные обучения")
+  # Форма наборов параметров и зарплат
+  print(f"x_data shape: {x_data.shape}")
+  print(f"y_data shape: {y_data.shape}")
+
+  # Пример обработанных данных
+  n = 0
+  print(f"x_data[{n}] : {x_data[n]}")
+  print(f"y_data[{n}] : {y_data[n]}")
+
+
+if y_train is not None:
+  print(f"="*80)
+  print(f"Сравнение y_data/train (старый / новый способ), приводятся только первые 10 различающихся строк")
+  print(f"y_data     shape: {y_data.shape}")
+  print(f"y_train    shape: {y_train.shape}")
+  n = 0
+  for i in range(len(y_data)):
+    if y_data[i] != y_train[i]:
+      n += 1
+      print(f"y_data[{i}]  : {y_data[i]}")
+      print(f"y_train[{i}] : {y_train[i]}")
+      print(f"new_data_row: {new_data_rows[i]}")
+      print(f"old_data_row: {old_data_rows[i]}")
+    if n >= 10:
+      break
+
+del old_data_rows
+del new_data_rows
+
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# Списки включения / исключения наборов гиперпараметров
+
+TRAIN_INCLUDE = None  # Включать всё
+TRAIN_EXCLUDE = None  # Ничего не исключать
+
+# TRAIN_INCLUDE = ['simple_old', 'simple', 'simple_fast', 'simple_drop', 'simple_ndrop']
+# TRAIN_EXCLUDE = ['branched_old', 'branched']
 
 ###
 # Решение задачи
 
 ENV[ENV__DEBUG_PRINT] = True
 
+# Подключение google диска если работа в ноутбуке
 if not STANDALONE:
-    # Подключение google диска если работа в ноутбуке
     connect_gdrive()
 
-    # А так же директива для отрисовки matplot в вывод ноутбука
-    # %matplotlib inline
-
-# -------------------------------------------------------------------------------------------------------------------- #
-# Перегрузка констант под текущую задачу
-
-ENV[ENV__TEXTS__BOW_USED] = False
+# Перегрузка окружения под текущую задачу
 
 ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_7_lite_1a"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-3)]
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = "mse"
 ENV[ENV__TRAIN__DEFAULT_METRICS]         = ["mae"]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 256
-ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 2 # TODO: 50
-ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0   # максимум чтобы каждая сеть прошла все эпохи обучения
-ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
+ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 50
+ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0    # максимум чтобы каждая сеть прошла все эпохи обучения
+ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10     # частые вылеты из-за нехватки памяти, так что сохраняемся чаще
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
-# Для нормализации данных используется готовый инструмент
-y_scaler = StandardScaler()
+# Нормализация выходных данных по стандартному нормальному распределению
+# (корректно отпарсенные данные)
+if y_data is None:
+  y_data_scaler = None
+  y_data_scaled = None
+  y_data_unscaled = None
+else:
+  y_data_scaler = StandardScaler()
+  data_len = len(y_data)
+  y_data_scaled = y_data_scaler.fit_transform(y_data)
+  y_data_unscaled = y_data
+
+  # Проверка нормализации
+  print(y_data_scaled.shape)
+  print(f'Оригинальное значение зарплаты:  {y_data_unscaled[1, 0]}')
+  print(f'Нормированное значение зарплаты: {y_data_scaled[1, 0]}')
+
+  # Вывод границ ненормализованных и нормализованных данных
+  print(y_data_unscaled.mean(), y_data_unscaled.std())
+  print(y_data_scaled.mean(),   y_data_scaled.std())
+
+del y_data  # Удаляется y_data чтобы не создавать путаницы
 
 # Нормализация выходных данных по стандартному нормальному распределению
-y_data_scaled = y_scaler.fit_transform(y_data)
+# (исходные данные с некорректныи парсингом)
+if y_train is None:
+  y_train_scaler = None
+  y_train_scaled = None
+  y_train_unscaled = None
+else:
+  y_train_scaler = StandardScaler()
+  data_len = len(y_train)
+  y_train_scaled = y_train_scaler.fit_transform(y_train)
+  y_train_unscaled = y_train
 
-# Проверка нормализации
-print(y_data_scaled.shape)
-print(f'Оригинальное значение зарплаты:  {y_data[1, 0]}')
-print(f'Нормированное значение зарплаты: {y_data_scaled[1, 0]}')
+  # Проверка нормализации
+  print(y_train_scaled.shape)
+  print(f'Оригинальное значение зарплаты:  {y_train_unscaled[1, 0]}')
+  print(f'Нормированное значение зарплаты: {y_train_scaled[1, 0]}')
 
-# Вывод границ ненормализованных и нормализованных данных
-print(y_data.mean(), y_data.std())
-print(y_data_scaled.mean(), y_data_scaled.std())
+  # Вывод границ ненормализованных и нормализованных данных
+  print(y_train_unscaled.mean(), y_train_unscaled.std())
+  print(y_train_scaled.mean(),   y_train_scaled.std())
 
-# Поменять значение y_data на нормализованное, чтобы в коде ниже оставить имя переменной y_data
-y_data_unscaled = y_data
-y_data = y_data_scaled
+del y_train  # Удаляется y_train чтобы не создавать путаницы
 
-# Поставщик данных для ветки "базового" типа
-general_data = TrainDataProvider(x_data, y_data, None, None, None, None)
+
+# -------------------------------------------------------------------------------------------------------------------- #
 
 # Шаблоны моделей для обучения
 
 models = to_dict(
-    initial = to_dict(
-        name = "initial",
+
+    simple = to_dict(
         model_class = Model,
+        template = to_dict(
+            branch_general = to_dict(
+                input = True,
+                output = True,
+                layers = [
+                    layer_template(Input,   "$branch_general_input_shape"),
+                    layer_template(Dense,   128,  activation="relu"),
+                    layer_template(Dense,   1000, activation="tanh"),
+                    layer_template(Dense,   100,  activation="relu"),
+                    layer_template(Dense,   1,    activation='linear'),
+                ],
+            )
+        )
+    ),
+
+    simple_fast = to_dict(
+        model_class = Model,
+        optimizer = [Adam, [], to_dict(learning_rate=1e-2)],
+        template = to_dict(
+            branch_general = to_dict(
+                input = True,
+                output = True,
+                layers = [
+                    layer_template(Input,   "$branch_general_input_shape"),
+                    layer_template(Dense,   128,  activation="relu"),
+                    layer_template(Dense,   1000, activation="tanh"),
+                    layer_template(Dense,   100,  activation="relu"),
+                    layer_template(Dense,   1,    activation='linear'),
+                ],
+            )
+        )
+    ),
+
+    simple_drop = to_dict(
+        model_class = Model,
+        template = to_dict(
+            branch_general = to_dict(
+                input = True,
+                output = True,
+                layers = [
+                    layer_template(Input,   "$branch_general_input_shape"),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   128,  activation="relu"),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   1000, activation="tanh"),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   100,  activation="relu"),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   1,    activation='linear'),
+                ],
+            )
+        )
+    ),
+
+    simple_norm = to_dict(
+        model_class = Model,
+        template = to_dict(
+            branch_general = to_dict(
+                input = True,
+                output = True,
+                layers = [
+                    layer_template(Input,   "$branch_general_input_shape"),
+                    layer_template(Dense,   128,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   1000, activation="tanh"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   100,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   1,    activation='linear'),
+                ],
+            )
+        )
+    ),
+
+    simple_ndrop = to_dict(
+        model_class = Model,
+        template = to_dict(
+            branch_general = to_dict(
+                input = True,
+                output = True,
+                layers = [
+                    layer_template(Input,   "$branch_general_input_shape"),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   128,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   1000, activation="tanh"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   100,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dropout, "$globals_drop_rate"),
+                    layer_template(Dense,   1,    activation='linear'),
+                ],
+            )
+        )
+    ),
+
+    simple_small = to_dict(
+        model_class = Model,
+        template = to_dict(
+            branch_general = to_dict(
+                input = True,
+                output = True,
+                layers = [
+                    layer_template(Input,   "$branch_general_input_shape"),
+                    layer_template(Dense,   64,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   300, activation="tanh"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   30,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   1,    activation='linear'),
+                ],
+            )
+        )
+    ),
+
+    simple_large = to_dict(
+        model_class = Model,
+        template = to_dict(
+            branch_general = to_dict(
+                input = True,
+                output = True,
+                layers = [
+                    layer_template(Input,   "$branch_general_input_shape"),
+                    layer_template(Dense,   256,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   3000, activation="tanh"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   300,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   30,  activation="relu"),
+                    layer_template(BatchNormalization),
+                    layer_template(Dense,   1,    activation='linear'),
+                ],
+            )
+        )
+    ),
+
+    branched = to_dict(
+        model_class = Model,
+        save_step = 1,  # Для этой модели часто недостаточно памяти, поэтому сохранения частые
         template = to_dict(
 
             # Branch 1 (processes x_train)
@@ -451,9 +674,9 @@ models = to_dict(
                 input = True,
                 layers = [
                     layer_template(Input,   "$branch_general_input_shape"),
-                    layer_template(Dense,   128, activation="relu"),
+                    layer_template(Dense,   128,  activation="relu"),
                     layer_template(Dense,   1000, activation="tanh"),
-                    layer_template(Dense,   100, activation="relu"),
+                    layer_template(Dense,   100,  activation="relu"),
                 ],
             ),
 
@@ -462,7 +685,7 @@ models = to_dict(
                 input = True,
                 layers = [
                     layer_template(Input,   "$branch_prof_input_shape"),
-                    layer_template(Dense,   20, activation="relu"),
+                    layer_template(Dense,   20,  activation="relu"),
                     layer_template(Dense,   500, activation="relu"),
                     layer_template(Dropout, "$globals_drop_rate"),
                 ],
@@ -473,7 +696,7 @@ models = to_dict(
                 input = True,
                 layers = [
                     layer_template(Input,   "$branch_exp_input_shape"),
-                    layer_template(Dense,   30, activation="relu"),
+                    layer_template(Dense,   30,  activation="relu"),
                     layer_template(Dense,   800, activation="relu"),
                     layer_template(Dropout, "$globals_drop_rate"),
                 ],
@@ -486,26 +709,164 @@ models = to_dict(
                     layer_template(concatenate, ["$branch_general", "$branch_prof", "$branch_exp"]),
                     layer_template(Dense,   15, activation='relu'),
                     layer_template(Dropout, "$output_drop_rate"),
-                    layer_template(Dense,   1, activation='linear'),
+                    layer_template(Dense,   1,  activation='linear'),
                 ]
             )
         )
     )
 )
 
-hyper_params_sets = (
-    to_dict(
-        tabs=['learn:initial', 'regress:initial'],
-        model='initial',
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# Поставщики данных для ветки "базового" типа (со старыми / новыми данными)
+general_data     = TrainDataProvider(x_data,     y_data_scaled,  None, None, None, None)
+general_data_old = TrainDataProvider(x_train_01, y_train_scaled, None, None, None, None)
+
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# Общие части наборов гиперамеров
+hp_defaults = to_dict(
+        tabs=['learn', 'regress' , 'regress-best'],
+)
+
+hp_new_data = to_dict(
+        general_data_provider = general_data,
+        y_data     = y_data_scaled,
+        y_data_raw = y_data_unscaled,
+        y_scaler   = y_data_scaler,
+)
+
+hp_old_data = to_dict(
+        general_data_provider = general_data_old,
+        y_data     = y_train_scaled,
+        y_data_raw = y_train_unscaled,
+        y_scaler   = y_train_scaler,
+)
+
+# Наборы гиперамеров. Если модель не указана явно, используется модель с именем набора гиперпараметров
+hyper_params_sets = to_dict(
+    simple = to_dict(
+        tabs=['learn', 'regress' , 'regress-best', 'learn_no', 'regress_no' , 'regress_no-best',],
         model_vars=to_dict(
             globals_drop_rate = 0.3,
             output_drop_rate = 0.5
         ),
-        prof_data_vars = to_dict(vocab_size=3000, chunk_size=None, chunk_step=None),
-        exp_data_vars = to_dict(vocab_size=3000, chunk_size=None, chunk_step=None),
+        **hp_new_data,
+    ),
+    simple_fast = to_dict(
+        **hp_defaults,
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_new_data,
+    ),
+    simple_drop = to_dict(
+        **hp_defaults,
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_new_data,
+    ),
+    simple_norm = to_dict(
+        **hp_defaults,
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_new_data,
+    ),
+    simple_ndrop = to_dict(
+        **hp_defaults,
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_new_data,
+    ),
+    simple_small = to_dict(
+        **hp_defaults,
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_new_data,
+    ),
+    simple_large = to_dict(
+        **hp_defaults,
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_new_data,
+    ),
+
+
+    simple_old = to_dict(
+        tabs=['learn_no', 'regress_no' , 'regress_no-best',],
+        model='simple',
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_old_data,
+    ),
+    branched = to_dict(
+        tabs=['learn', 'regress' , 'regress-best', 'learn_no', 'regress_no' , 'regress_no-best',],
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_new_data,
+        prof_data_vars = to_dict(vocab_size=2000, chunk_size=None, chunk_step=None),
+        exp_data_vars  = to_dict(vocab_size=2000, chunk_size=None, chunk_step=None),
+    ),
+    branched_old = to_dict(
+        tabs=['learn_no', 'regress_no' , 'regress_no-best',],
+        model='branched',
+        model_vars=to_dict(
+            globals_drop_rate = 0.3,
+            output_drop_rate = 0.5
+        ),
+        **hp_old_data,
+        prof_data_vars = to_dict(vocab_size=2000, chunk_size=None, chunk_step=None),
+        exp_data_vars  = to_dict(vocab_size=2000, chunk_size=None, chunk_step=None),
     ),
 )
 
+# -------------------------------------------------------------------------------------------------------------------- #
+
+# Удалить не используемые в текущем прогоне данные чтобы освободить память
+
+for k in list(hyper_params_sets):
+    if TRAIN_INCLUDE is not None and k not in TRAIN_INCLUDE:
+      del hyper_params_sets[k]
+      continue
+    if TRAIN_EXCLUDE is not None and k in     TRAIN_EXCLUDE:
+      del hyper_params_sets[k]
+      continue
+
+new_data_used = any(v['general_data_provider'] == general_data     for v in hyper_params_sets.values())
+old_data_used = any(v['general_data_provider'] == general_data_old for v in hyper_params_sets.values())
+
+if not new_data_used:
+    del general_data
+    del y_data_scaled
+    del y_data_unscaled
+    del y_data_scaler
+
+if not old_data_used:
+    del general_data_old
+    del y_train_scaled
+    del y_train_unscaled
+    del y_train_scaler
+    
+if x_train_01 is None:
+    for k in list(hyper_params_sets):
+        if hyper_params_sets[k]['general_data_provider'] == general_data_old:
+            del hyper_params_sets[k]
+    
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Создать вкладки для вывода результатов
@@ -516,9 +877,10 @@ from functools import lru_cache
 model_tabs = {}
 tabs_dict = {}
 for k in models:
-    for hyper_params in hyper_params_sets:
+    for hp_name, hyper_params in hyper_params_sets.items():
         for tab_id in hyper_params['tabs']:
-            tab_group, tab_i = tab_id.split(":")
+            tab_group = tab_id
+            tab_i = hp_name
             if tab_group not in tabs_dict:
                 tabs_dict[tab_group] = {}
             widget = tabs_dict[tab_group][tab_i] = widgets.Output()
@@ -533,189 +895,234 @@ for k, v in tabs_dict.items():
     tabs_objs[k].children = [v[kk] for kk in tab_items_keys]
     for i in range(0, len(tab_items_keys)):
         tabs_objs[k].set_title(i, f"{k}:{tab_items_keys[i]}")
-
-
-# Вывести вкладки с результатами
+        
 # -------------------------------------------------------------------------------------------------------------------- #
+
 tabs_objs.keys()
-# -------------------------------------------------------------------------------------------------------------------- #
 display(tabs_objs["learn"])
-# -------------------------------------------------------------------------------------------------------------------- #
 display(tabs_objs["regress"])
+display(tabs_objs["regress-best"])
+display(tabs_objs["learn_no"])
+display(tabs_objs["regress_no"])
+display(tabs_objs["regress_no-best"])
+
 # -------------------------------------------------------------------------------------------------------------------- #
 
 dummy_output = widgets.Output()
 
-# Обучение сети с нужными параметрами и сохранение результатов на диск
-
-n_data = [i for i in range(len(y_data))]
-
+# Подготовка информации для контролируемого разбиения данных
 data_split_provider = TrainDataProvider(
-    x_train = n_data,
-    y_train = y_data,
-    x_val   = 0.1,
+    x_train = [i for i in range(data_len)], # индексы элементов исходных данных,
+                            # которые будут перемешаны и разделены
+    y_train = [0]*data_len, # актуальные данные для y_train в нашем случае не требуются
+
+    x_val   = 0.1,          # доля проверочной выборки
     y_val   = None,
-    x_test  = 0.1,
+
+    x_test  = 0.001,        # доля тестовой выборки
+                            # (сведена к минимуму, т.к при построении графика регрессии
+                            # будут использованы все исходные данные невзирая на данный параметр)
     y_test  = None,
 )
 
+# В словаре хранятся индексы элементов в исходных данных для каждой из подвыборок
 data_split = to_dict(
     train =  data_split_provider.x_train,
     val   =  data_split_provider.x_val,
     test  =  data_split_provider.x_test,
 )
 
-for hyper_params in hyper_params_sets:
-    hyper_params = copy.deepcopy(hyper_params)  # NOTE: make a copy since hyper_params may be changed, so original would would left at place and won't be polluted with temporary classes
-
-    with dummy_output:
-        clear_output()
-
-    # Функция, которая донастраивает модели из шаблона под текущие параметры
-    def tune_model(model, hyper_params):
-        tuned_model = copy.deepcopy(model)
-        # TODO: change name according to hyper params like this: tuned_model['name'] += f"--vocab_{hyper_params['v']['vocab_size']}--chunk_{hyper_params['v']['chunk_size']}_{hyper_params['v']['chunk_step']}"
-        # TODO: better use subst_vars for this (after regex support)
-        return tuned_model
-
-    def display_callback(message):
-        for tab_id in hyper_params['tabs']:
-            tab_group, tab_i = tab_id.split(":")
-            with tabs_dict[tab_group][tab_i]:
-                # Вывести во вкладку информацию об обучении
-                print(message)
-
-    model_data  = models[hyper_params['model']]
-    model_vars  = hyper_params['model_vars']
-
-    tune_model(model_data, hyper_params)
-
-    model_x_data = {
-        k: None for k, v in model_data['template'].items() if v.get("input") is True
-    }
-
-    for k in model_x_data:
-
-        if k == "branch_general":
-            model_x_data[k] = general_data
-            continue
-
-        elif k == "branch_prof":
-            data = TextTrainDataProvider(
-                texts=TrainDataProvider(prof_texts, y_data, None, None, None, None),
-                bow_default=True,
-                text_prepare_function=prepare_texts_dummy,
-                debug=ENV[ENV__DEBUG_PRINT],
-                **hyper_params.get(
-                    "prof_data_vars",
-                    to_dict(
-                        vocab_size = 3000,
-                        chunk_size = None,
-                        chunk_step = None,
-                    ),
-                ),
-            )
-            model_x_data[k] = data
-            continue
-
-        elif k == "branch_exp":
-            data = TextTrainDataProvider(
-                texts=TrainDataProvider(exp_texts, y_data, None, None, None, None),
-                bow_default=True,
-                text_prepare_function=prepare_texts_dummy,
-                debug=ENV[ENV__DEBUG_PRINT],
-                **hyper_params.get(
-                    "exp_data_vars",
-                    to_dict(
-                        vocab_size = 3000,
-                        chunk_size = None,
-                        chunk_step = None,
-                    ),
-                ),
-            )
-            model_x_data[k] = data
-            continue
-        
-        else:
-            raise ValueError(f"Don't know how to provide data to branch '{k}'!")
-        
-    x_data_dict = {
-        k:v.x_train for k,v in model_x_data.items()
-    }
-
-    data_provider = TrainDataProvider(
-        x_train = x_data_dict,
-        y_train = data_split_provider.y_train,
-        x_val   = None,
-        y_val   = data_split_provider.y_val,
-        x_test  = None,
-        y_test  = data_split_provider.y_test,
-        split   = data_split,
-        split_y = False,
-    )
-
-    for k,v in model_x_data.items():
-        model_vars[k+"_input_shape"] = v.x_train.shape[1]
-
-    mhd = ModelHandler(
-        name            = model_data['name'],
-        model_class     = model_data['model_class'],
-        optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
-        loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
-        metrics         = model_data.get('metrics',   ENV[ENV__TRAIN__DEFAULT_METRICS]),
-        model_template  = model_data['template'],
-        model_variables = model_vars,
-        batch_size      = model_data.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
-        data_provider   = data_provider,
-    )
-
-    def on_model_update(thd):
-        data_provider.x_order = thd.mhd.inputs_order
-
-    thd = TrainHandler(
-        data_path       = ENV[ENV__MODEL__DATA_ROOT] / model_data.get("data_path", ENV[ENV__TRAIN__DEFAULT_DATA_PATH]),
-        data_name       = model_data['name'],
-        mhd             = mhd,
-        mhd_class       = ModelHandler,
-        on_model_update = on_model_update
-    )
-    
-    thd.train(
-        from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
-        epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
-        target_accuracy = model_data.get("target_accuracy", ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY]),
-        save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
-        display_callback= display_callback
-    )
-
-    # Вывод результатов для сравнения
-    full_history = copy.deepcopy(mhd.context.history)
-    thd.load_best()
-    mhd.context.report_history = full_history
-
-    for tab_id in hyper_params['tabs']:
-        tab_group, tab_i = tab_id.split(":")
-        # TODO: is it required to call `mhd.update_data()` ?
-        with tabs_dict[tab_group][tab_i]:
-            clear_output()
-            if tab_group == "learn":
-                mhd.context.report_to_screen()
-                mhd.model.summary()
-                utils.plot_model(mhd.model, dpi=60)
-            else:
-                limit = 1000.   # TODO: get from input data / classes specification
-                fig, ax = plt.subplots(figsize=(6, 6))
-                ax.scatter(data_provider.y_test, mhd.context.test_pred)
-                ax.set_xlim(0, limit)                     # Пределы по x, y
-                ax.set_ylim(0, limit)
-                ax.plot(plt.xlim(), plt.ylim(), 'r')      # Отрисовка диагональной линии
-                plt.xlabel('Правильные значения')
-                plt.ylabel('Предсказания')
-                plt.grid()
-                plt.show()
+# Обучение сети с нужными параметрами и сохранение результатов на диск
+for hp_name, hyper_params in hyper_params_sets.items():
+    # Весь код упакован в функцию чтобы по окончанию обучения каждой модели контекст автоматически очищался и не засорял память
+    def learn_and_print(hp_name, hyper_params):
+        hyper_params = copy.deepcopy(hyper_params)  # NOTE: make a copy since hyper_params may be changed, so original would would left at place and won't be polluted with temporary classes
 
         with dummy_output:
             clear_output()
 
-    mhd.context.report_history = None
-    mhd.unload_model()
+        if 'model' not in hyper_params:
+            hyper_params['model'] = hp_name
+        model_data  = copy.deepcopy(models[hyper_params['model']])
+        model_vars  = {**hyper_params['model_vars']}
+        run_name    = hp_name
+
+        def display_callback(message):
+            for tab_id in hyper_params['tabs']:
+                tab_group = tab_id
+                tab_i = run_name
+                with tabs_dict[tab_group][tab_i]:
+                    # Вывести во вкладку информацию об обучении
+                    print(message)
+
+        # Проинициализировать словарь входных данных (на основании ветвей модели, помеченных как вход)
+        model_x_data = {
+            k: None for k, v in model_data['template'].items() if v.get("input") is True
+        }
+
+        hp_y_data     = hyper_params['y_data']
+        hp_y_data_raw = hyper_params['y_data_raw']
+        hp_y_scaler   = hyper_params['y_scaler']
+
+        # Заполнение словаря входных данных для соответствующих ветвей модели
+        for k in model_x_data:
+
+            if k == "branch_general":
+                model_x_data[k] = hyper_params['general_data_provider']
+                continue
+
+            elif k == "branch_prof":
+                data = TextTrainDataProvider(
+                    texts=TrainDataProvider(prof_texts, hp_y_data, None, None, None, None),
+                    seq_used=False,
+                    bow_default=True,
+                    text_prepare_function=prepare_texts_dummy,
+                    debug=ENV[ENV__DEBUG_PRINT],
+                    **hyper_params.get(
+                        "prof_data_vars",
+                        to_dict(
+                            vocab_size = 3000,
+                            chunk_size = None,
+                            chunk_step = None,
+                        ),
+                    ),
+                )
+                model_x_data[k] = data
+                continue
+
+            elif k == "branch_exp":
+                data = TextTrainDataProvider(
+                    texts=TrainDataProvider(exp_texts, hp_y_data, None, None, None, None),
+                    seq_used=False,
+                    bow_default=True,
+                    text_prepare_function=prepare_texts_dummy,
+                    debug=ENV[ENV__DEBUG_PRINT],
+                    **hyper_params.get(
+                        "exp_data_vars",
+                        to_dict(
+                            vocab_size = 3000,
+                            chunk_size = None,
+                            chunk_step = None,
+                        ),
+                    ),
+                )
+                model_x_data[k] = data
+                continue
+
+            else:
+                raise ValueError(f"Don't know how to provide data to branch '{k}'!")
+
+        x_data_dict = {
+            k:v.x_train for k,v in model_x_data.items()
+        }
+
+        # Разбиение входных данных переде обучением на выборки
+        data_provider = TrainDataProvider(
+            x_train = x_data_dict,
+            y_train = hp_y_data,
+            x_val   = None,
+            y_val   = None,
+            x_test  = None,
+            y_test  = None,
+            split   = data_split,
+            split_y = True,
+        )
+
+        for k,v in model_x_data.items():
+            model_vars[k+"_input_shape"] = v.x_train.shape[1]
+
+        mhd = ModelHandler(
+            name            = run_name,
+            model_class     = model_data['model_class'],
+            optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
+            loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
+            metrics         = model_data.get('metrics',   ENV[ENV__TRAIN__DEFAULT_METRICS]),
+            model_template  = model_data['template'],
+            model_variables = model_vars,
+            batch_size      = model_data.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
+            data_provider   = data_provider,
+        )
+
+        def on_model_update(thd):
+            data_provider.x_order = thd.mhd.inputs_order
+
+        thd = TrainHandler(
+            data_path       = ENV[ENV__MODEL__DATA_ROOT] / model_data.get("data_path", ENV[ENV__TRAIN__DEFAULT_DATA_PATH]),
+            data_name       = run_name,
+            mhd             = mhd,
+            mhd_class       = ModelHandler,
+            on_model_update = on_model_update
+        )
+
+        thd.train(
+            from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
+            epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
+            target_accuracy = model_data.get("target_accuracy", ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY]),
+            save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
+            display_callback= display_callback
+        )
+
+        # Вывод результатов для сравнения
+        full_history = copy.deepcopy(mhd.context.history)
+
+        # Use whole data set for test data for reports
+        data_provider._x_test = {
+          k:np.array(v.x_train) for k,v in model_x_data.items()
+        }
+        data_provider._y_test = hp_y_data
+
+        mhd.update_data(force=True)
+        pred_last = mhd.context.test_pred
+
+        thd.load_best()
+        mhd.update_data(force=True)
+        pred_best = mhd.context.test_pred
+
+        mhd.context.report_history = full_history
+
+        for tab_id in hyper_params['tabs']:
+            tab_group = tab_id
+            tab_i     = run_name
+            with tabs_dict[tab_group][tab_i]:
+                clear_output()
+                print(f"Модель         : {hyper_params['model']}")
+                print(f"Гиперпараметры : {hp_name}")
+                print("")
+                if "learn" in tab_group:
+                    mhd.context.report_to_screen()
+                    mhd.model.summary()
+                    utils.plot_model(mhd.model, dpi=60)
+                else:
+                    if "best" in tab_group:
+                        pred = pred_best
+                    else:
+                        pred = pred_last
+                    if hp_y_scaler is not None:       # Если есть нормирование - то денормировать
+                        pred = hp_y_scaler.inverse_transform(pred)
+
+                    print('Средняя абсолютная ошибка:', mean_absolute_error(pred, hp_y_data_raw), '\n')
+
+                    n = 10
+                    for i in range(n):
+                        print('Реальное значение: {:6.2f}  Предсказанное значение: {:6.2f}  Разница: {:6.2f}'.format(
+                            hp_y_data_raw[i, 0],
+                            pred[i, 0],
+                            abs(hp_y_data_raw[i, 0] - pred[i, 0])))
+
+                    limit = 1000.   # TODO: get from input data / classes specification
+                    fig, ax = plt.subplots(figsize=(6, 6))
+                    ax.scatter(hp_y_data_raw, pred)
+                    ax.set_xlim(0, limit)                     # Пределы по x, y
+                    ax.set_ylim(0, limit)
+                    ax.plot(plt.xlim(), plt.ylim(), 'r')      # Отрисовка диагональной линии
+                    plt.xlabel('Правильные значения')
+                    plt.ylabel('Предсказания')
+                    plt.grid()
+                    plt.show()
+
+            with dummy_output:
+                clear_output()
+
+        mhd.context.report_history = None
+        mhd.unload_model()
+    learn_and_print(hp_name, hyper_params)
