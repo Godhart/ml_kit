@@ -442,6 +442,7 @@ del new_data_rows
 
 TRAIN_INCLUDE = None  # Включать всё
 TRAIN_EXCLUDE = None  # Ничего не исключать
+REDUCED_DATA_SET = None # None или число записей, до которых сократить входные данные
 
 # TRAIN_INCLUDE = ['simple_old', 'simple', 'simple_fast', 'simple_drop', 'simple_ndrop']
 # TRAIN_EXCLUDE = ['branched_old', 'branched']
@@ -466,6 +467,15 @@ ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 50
 ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0    # максимум чтобы каждая сеть прошла все эпохи обучения
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10     # частые вылеты из-за нехватки памяти, так что сохраняемся чаще
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
+
+# -------------------------------------------------------------------------------------------------------------------- #
+
+if REDUCED_DATA_SET is not None:
+    x_data = x_data[:REDUCED_DATA_SET]
+    y_data = y_data[:REDUCED_DATA_SET]
+    if x_train_01 is not None:
+        x_train_01 = x_train_01[:REDUCED_DATA_SET]
+        y_train    = y_train[:REDUCED_DATA_SET]
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
