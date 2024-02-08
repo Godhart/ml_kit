@@ -178,6 +178,10 @@ class TrainDataProvider:
         return self._y(self._y_train, None)
 
     @property
+    def xy_train(self):
+        return self.x_train, self.y_train
+
+    @property
     def x_val(self):
         return self._x(self._x_val, None)
 
@@ -186,12 +190,20 @@ class TrainDataProvider:
         return self._y(self._y_val, None)
 
     @property
+    def xy_val(self):
+        return self.x_val, self.y_val
+
+    @property
     def x_test(self):
         return self._x(self._x_test, None)
 
     @property
     def y_test(self):
         return self._y(self._y_test, None)
+
+    @property
+    def xy_test(self):
+        return self.x_test, self.y_test
 
     def all_as_tuple(self, x_order=None, y_order=None):
         return (
@@ -202,68 +214,6 @@ class TrainDataProvider:
             self._x(self.x_test , x_order),
             self._y(self.y_test , y_order),
         )
-
-    def train_val_as_tuple(self, x_order=None, y_order=None):
-        return (
-            self._x(self.x_train, x_order),
-            self._y(self.y_train, y_order),
-            self._x(self.x_val  , x_order),
-            self._y(self.y_val  , y_order),
-        )
-
-    def train_as_tuple(self, x_order=None, y_order=None):
-        return (
-            self._x(self.x_train, x_order),
-            self._y(self.y_train, y_order),
-        )
-
-    def val_as_tuple(self, x_order=None, y_order=None):
-        return (
-            self._x(self.x_val, x_order),
-            self._y(self.y_val, y_order),
-        )
-
-    def test_as_tuple(self, x_order=None, y_order=None):
-        return (
-            self._x(self.x_test, x_order),
-            self._y(self.y_test, y_order),
-        )
-
-    def all_as_dict(self, x_order=None, y_order=None):
-        return {
-            "x_train"   : self._x(self.x_train, x_order),
-            "y_train"   : self._y(self.y_train, y_order),
-            "x_val"     : self._x(self.x_val  , x_order),
-            "y_val"     : self._y(self.y_val  , y_order),
-            "x_test"    : self._x(self.x_test , x_order),
-            "y_test"    : self._y(self.y_test , y_order),
-        }
-
-    def train_val_as_dict(self, x_order=None, y_order=None):
-        return {
-            "x_train"   : self._x(self.x_train, x_order),
-            "y_train"   : self._y(self.y_train, y_order),
-            "x_val"     : self._x(self.x_val  , x_order),
-            "y_val"     : self._y(self.y_val  , y_order),
-        }
-
-    def train_as_dict(self, x_order=None, y_order=None):
-        return {
-            "x_train"   : self._x(self.x_train, x_order),
-            "y_train"   : self._y(self.y_train, y_order),
-        }
-
-    def val_as_dict(self, x_order=None, y_order=None):
-        return {
-            "x_val"     : self._x(self.x_val  , x_order),
-            "y_val"     : self._y(self.y_val  , y_order),
-        }
-
-    def test_as_dict(self, x_order=None, y_order=None):
-        return {
-            "x_test"    : self._x(self.x_test , x_order),
-            "y_test"    : self._y(self.y_test , y_order),
-        }
 
 
 class ModelContext:
