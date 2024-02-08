@@ -47,7 +47,9 @@ ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_6_lite_1"
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = "categorical_crossentropy"
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 512
 ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 100
-ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0   # максимум чтобы каждая сеть прошла все эпохи обучения
+ENV[ENV__TRAIN__DEFAULT_TARGET]          = {
+    S_ACCURACY : 1.0,                    # максимум чтобы каждая сеть прошла все эпохи обучения
+}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 

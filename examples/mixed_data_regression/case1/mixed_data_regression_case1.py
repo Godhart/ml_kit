@@ -460,11 +460,11 @@ if not STANDALONE:
 
 ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_7_lite_1a"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-3)]
-ENV[ENV__TRAIN__DEFAULT_LOSS]            = "mse"
-ENV[ENV__TRAIN__DEFAULT_METRICS]         = ["mae"]
+ENV[ENV__TRAIN__DEFAULT_LOSS]            = S_MSE
+ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_MAE]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 256
 ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 50
-ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0    # максимум чтобы каждая сеть прошла все эпохи обучения
+ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_MAE: 0.0}    # максимум чтобы каждая сеть прошла все эпохи обучения
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10     # частые вылеты из-за нехватки памяти, так что сохраняемся чаще
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
@@ -1067,7 +1067,7 @@ for hp_name, hyper_params in hyper_params_sets.items():
         thd.train(
             from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
             epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
-            target_accuracy = model_data.get("target_accuracy", ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY]),
+            target          = model_data.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET]),
             save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
             display_callback= display_callback
         )
