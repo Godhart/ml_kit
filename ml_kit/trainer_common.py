@@ -53,6 +53,7 @@ S_COMPLETE = "complete"
 
 S_ACCURACY = "accuracy"
 S_MAE = "mae"
+S_MSE = "mse"
 S_LOSS = "loss"
 
 S_CM = "cm"
@@ -60,7 +61,15 @@ S_REGRESSION = "regression"
 
 MAE_MAX = float(2**31-1)
 
-METRICS = [S_ACCURACY, S_MAE, ]
+S_COMPARE = "compare"
+S_GE = "ge"
+S_LE = "le"
+
+METRICS = {
+    S_ACCURACY  : {S_COMPARE: S_GE},
+    S_MAE       : {S_COMPARE: S_LE},
+}
+
 METRICS_T = {
     S_ACCURACY  : "доля верных ответов",
     S_MAE       : "средняя абсолютная ошибка",
@@ -234,7 +243,7 @@ class ModelContext:
         model_class         : None,
         optimizer           : None,
         loss                : None,
-        metrics             : list,
+        metrics             : list | None,
         model_template      : list | None = None,
         model_variables     : dict | None = None,
         inputs_order        : list | None = None,
@@ -278,6 +287,23 @@ class ModelContext:
         if self._history is None:
             return MAE_MAX
         return float(self._history.get("val_mae", [MAE_MAX])[-1])
+
+    @property
+    def metrics(self):
+        result = {}
+        for metric in self._metrics:
+            if hasattr(self, metric):
+                result[metric] = getattr(self, metric)
+            else:
+                result[metric] = None
+        return result
+
+    @metrics.setter
+    def metrics(self, value):
+        if value is not None and not isinstance(value):
+            raise ValueError("'value' should be a list!")
+        value = value or []
+        self._metrics = [v for v in value if isinstance(v, str)]
 
     @property
     def test_accuracy(self):
@@ -632,7 +658,7 @@ class ModelHandler():
         self._model.compile(
             optimizer=optimizer,
             loss=self.context.loss,
-            metrics=self.context.metrics,
+            metrics=list(self.context.metrics.keys()),
         )
 
     def fit(self, epochs, initial_epoch=None):
@@ -889,11 +915,23 @@ class TrainHandler:
             if path.exists():
                 shutil.rmtree(path)
 
+    def is_enough(self, target):
+        if len(target) == 0:
+            return False
+        enough = True
+        for metric in METRICS:
+            if metric in target:
+                if METRICS[metric][S_COMPARE] == S_GE:
+                    if not getattr(self.mhd.context, metric) >= target[metric]:
+                        enough = False
+                        break
+        return enough
+
     def train(
             self,
             from_scratch    : bool | None,
-            epochs          : int | None,
-            target_accuracy : float | None,
+            epochs          : int  | None,
+            target          : dict | None,
             train_step      : int = 1,  # With steps greater than 1 best value can be missed
             save_step       : int = 5,
             display_callback= print,
@@ -926,15 +964,14 @@ class TrainHandler:
         if self.on_model_update is not None:
             self.on_model_update(self)
 
-        if  self.mhd.context.epoch < epochs and self.mhd.context.accuracy < target_accuracy:
-            display_callback(f"Starting to train from epoch {self.mhd.context.epoch}, accuracy: {self.mhd.context.accuracy}"
-                f", target accuracy: {target_accuracy}, max epoch: {epochs}")
+        if  self.mhd.context.epoch < epochs and not self.is_enough(target):
+            display_callback(f"Starting to train from epoch {self.mhd.context.epoch}, max epoch: {epochs}, "
+                f", target: {target}, metrics: {self.mhd.context.metrics}")
 
             next_save = self.mhd.context.epoch + save_step
 
-            enough = self.mhd.context.accuracy >= target_accuracy
             save_result = False # by default don't save if not trained
-            while self.mhd.context.epoch < epochs and not enough:
+            while self.mhd.context.epoch < epochs and not self.is_enough(target):
                 save_result = True
                 
                 display_metrics = []
@@ -975,9 +1012,8 @@ class TrainHandler:
                     self.save(S_REGULAR)
                     next_save += save_step
 
-                if self.mhd.context.accuracy >= target_accuracy:
-                    # TODO: check accuracy on test_data
-                    enough = True
+                if self.is_enough(target):
+                    # TODO: check metrics on test_data
                     break
 
             if save_result:
@@ -1031,7 +1067,7 @@ if STANDALONE:
         thd.train(
             from_scratch    =FROM_SCRATCH,
             epochs          =EPOCHS,
-            target_accuracy =TARGET_ACCURACY,
+            target          = {S_ACCURACY: TARGET_ACCURACY},
             save_step       =SAVE_STEP,
         )
         thd.mhd.context.to_screen()
