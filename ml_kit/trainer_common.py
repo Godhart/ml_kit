@@ -668,7 +668,7 @@ class ModelHandler():
         self.history = self.model.fit(
             self.data_provider.x_train, self.data_provider.y_train,
             batch_size=self.batch_size,
-            epochs=epochs,
+            epochs=(initial_epoch or 0) + epochs,
             validation_data=(self.data_provider.x_val, self.data_provider.y_val),
             **kwargs,
         ).history
@@ -988,7 +988,7 @@ class TrainHandler:
                     f"best - {best.mhd.context.epoch}/{'/'.join(best_metrics)}"
                 )
                 if self.mhd.context.epoch > 0:
-                    initial_epoch = None # TODO: initial_epoch = self.mhd.context.epoch  # TODO: +1?
+                    initial_epoch = self.mhd.context.epoch
                 else:
                     initial_epoch = None
                 self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch)
