@@ -24,7 +24,7 @@ ENV__TRAIN__DEFAULT_LOSS            = "ENV__TRAIN__DEFAULT_LOSS"
 ENV__TRAIN__DEFAULT_METRICS         = "ENV__TRAIN__DEFAULT_METRICS"
 ENV__TRAIN__DEFAULT_BATCH_SIZE      = "ENV__TRAIN__DEFAULT_BATCH_SIZE"
 ENV__TRAIN__DEFAULT_EPOCHS          = "ENV__TRAIN__DEFAULT_EPOCHS"
-ENV__TRAIN__DEFAULT_TARGET_ACCURACY = "ENV__TRAIN__DEFAULT_TARGET_ACCURACY"
+ENV__TRAIN__DEFAULT_TARGET          = "ENV__TRAIN__DEFAULT_TARGET"
 ENV__TRAIN__DEFAULT_SAVE_STEP       = "ENV__TRAIN__DEFAULT_SAVE_STEP"
 ENV__TRAIN__DEFAULT_FROM_SCRATCH    = "ENV__TRAIN__DEFAULT_FROM_SCRATCH"
 
@@ -41,7 +41,7 @@ ENV[ENV__TRAIN__DEFAULT_LOSS]            = "categorical_crossentropy"
 ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_ACCURACY]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 10
 ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 50
-ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY] = 1.0
+ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_ACCURACY:1.0}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
@@ -627,7 +627,7 @@ def text_train__all_together(
         thd.train(
             from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
             epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
-            target_accuracy = model_data.get("target_accuracy", ENV[ENV__TRAIN__DEFAULT_TARGET_ACCURACY]),
+            target          = model_data.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET]),
             save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
             display_callback= display_callback
         )
