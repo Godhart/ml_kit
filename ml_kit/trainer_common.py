@@ -243,7 +243,7 @@ class ModelContext:
         model_class         : None,
         optimizer           : None,
         loss                : None,
-        metrics             : list | None,
+        metrics             : list | dict | None,
         model_template      : list | None = None,
         model_variables     : dict | None = None,
         inputs_order        : list | None = None,
@@ -300,8 +300,8 @@ class ModelContext:
 
     @metrics.setter
     def metrics(self, value):
-        if value is not None and not isinstance(value):
-            raise ValueError("'value' should be a list!")
+        if value is not None and not isinstance(value, (list, dict)):
+            raise ValueError("'value' should be a list or a dict!")
         value = value or []
         self._metrics = [v for v in value if isinstance(v, str)]
 
@@ -329,12 +329,12 @@ class ModelContext:
     def epoch(self):
         if self._history is None:
             return 0
-        return max([len(self._history.get(metric, [])) for metric in self.metrics])
+        return max([len(self._history.get(metric, [])) for metric in self._metrics])
 
     def _plot_images(self, plotter, plot_f, plot_hist_args):
         plot_history = self.report_history or self.history
         if plot_history is not None:
-            print_metrics = [S_LOSS] + [m for m in self.metrics if m in plot_history]
+            print_metrics = [S_LOSS] + [m for m in self._metrics if m in plot_history]
             cols = 2
             rows = (len(print_metrics)+cols-1) // cols
             figsize = (self._hist_figsize[0]*cols, self._hist_figsize[1]*rows)
@@ -374,9 +374,9 @@ class ModelContext:
             "optimizer"     : self.optimizer,
             "epoch"         : self.epoch,
             "loss"          : self.loss,
-            "metrics"       : self.metrics,
+            "metrics"       : self._metrics,
         }
-        for metric in self.metrics:
+        for metric in self._metrics:
             if hasattr(self, metric):
                 with open(path / safe_path(f"val_{metric}-{getattr(self, metric)}"), "w") as f:
                     pass
@@ -404,7 +404,7 @@ class ModelContext:
     def report_to_screen(self):
         print(self.short_report())
         print(f"train epoch={self.epoch}")
-        for metric in self.metrics:
+        for metric in self._metrics:
             if metric not in self._history:
                 continue
             if hasattr(self, metric):
@@ -432,7 +432,7 @@ class ClassClassifierContext(ModelContext):
         model_class         : None,
         optimizer           : None,
         loss                : None,
-        metrics             : list,
+        metrics             : list | dict | None,
         model_template      : list | None = None,
         model_variables     : dict | None = None,
         inputs_order        : list | None = None,
