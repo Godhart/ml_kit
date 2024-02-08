@@ -947,6 +947,10 @@ class TrainHandler:
         if from_scratch is not True:
             if self.is_saved(S_REGULAR):
                 self.load(S_REGULAR)
+                if best.is_saved(S_BEST):
+                    best.load(S_BEST, dont_load_model=True)
+                    if best.mhd.context.epoch >= self.mhd.context.epoch:
+                        self.load(S_BEST)
             elif self.is_saved(S_BEST):
                 self.load(S_BEST)
             elif from_scratch is False:
