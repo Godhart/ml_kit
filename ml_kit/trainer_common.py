@@ -518,7 +518,7 @@ class ClassClassifierContext(ModelContext):
         extra_model_data['class_labels'] = self.class_labels
         super(ClassClassifierContext, self).summary_to_disk(path, extra_model_data)
         self._plot_cm_images(plt, plt.savefig, [path / "cm.png"])
-        
+
     def report_to_screen(self):
         super(ClassClassifierContext, self).report_to_screen()
         self._plot_cm_images(plt, plt.show, [])
@@ -553,7 +553,7 @@ class ModelHandler():
             optimizer       = optimizer,
             loss            = loss,
             metrics         = metrics,
-            inputs_order    = None,  
+            inputs_order    = None,
         )
         self.model_template  = model_template
         self.model_variables = model_variables
@@ -960,7 +960,7 @@ class TrainHandler:
         else:
             if best.is_saved(S_BEST):
                 best.load(S_BEST, dont_load_model=True)
-                
+
         if self.on_model_update is not None:
             self.on_model_update(self)
 
@@ -973,7 +973,7 @@ class TrainHandler:
             save_result = False # by default don't save if not trained
             while self.mhd.context.epoch < epochs and not self.is_enough(target):
                 save_result = True
-                
+
                 display_metrics = []
                 current_metrics = []
                 best_metrics = []
@@ -981,7 +981,7 @@ class TrainHandler:
                     display_metrics.append(metric)
                     current_metrics.append(str(getattr(self.mhd.context, metric)))
                     best_metrics.append(str(getattr(best.mhd.context, metric)))
-                
+
                 display_callback(
                     f"epoch/{'/'.join(display_metrics)}: "
                     f"current - {self.mhd.context.epoch}/{'/'.join(current_metrics)}, "
