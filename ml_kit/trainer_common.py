@@ -339,7 +339,7 @@ class ModelContext:
     def epoch(self):
         if self._history is None:
             return 0
-        return max([len(self._history.get(metric, [])) for metric in self._metrics])
+        return len(self._history[S_LOSS])
 
     def _plot_images(self, plotter, plot_f, plot_hist_args):
         plot_history = self.report_history or self.history
