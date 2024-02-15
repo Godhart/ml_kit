@@ -926,6 +926,8 @@ class TrainHandler:
                 shutil.rmtree(path)
 
     def is_enough(self, target):
+        if target is None:
+            return False
         if len(target) == 0:
             return False
         enough = True
