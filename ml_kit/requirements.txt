@@ -8,6 +8,7 @@ pandas
 Pillow
 PyYAML
 torch
+pydot
 
 # ?gdown
 # ?matplotlib-inline
