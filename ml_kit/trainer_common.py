@@ -23,9 +23,11 @@ import shutil
 import pickle
 import yaml
 import numpy as np
+import math
 from matplotlib import pyplot as plt
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import plot_model
+from tensorflow.keras.preprocessing.sequence import TimeseriesGenerator
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import train_test_split
 
@@ -104,6 +106,90 @@ def split_by_idx(source, split, list_conv=None):
         else:
             result[field] = list_conv([source[idx] for idx in split[field]])
     return result
+
+
+class SplitSequenceDef:
+
+    def __init__(
+        self,
+        val_size    : int | float | None,
+        test_size   : int | float | None,
+        margin      : int | None,
+        start_offset: int | None,
+        end_offset  : int | None,
+    ):
+        self.val_size = val_size
+        self.test_size = test_size
+        self.margin = margin
+        self.start_offset = start_offset
+        self.end_offset = end_offset
+
+
+def split_to_abs(source_len, split:SplitSequenceDef):
+    """
+    convert float/none to ints based on source_len
+    """
+    result = []
+    for value in (split.val_size, split.test_size, ):
+        if value is not None:
+            if isinstance(value, float):
+                if value > 0. :
+                    value = math.ceil(value*source_len)
+                else:
+                    value = 0
+        else:
+            value = 0
+        if value < 0:
+            value = 0
+        result.append(value)
+    return SplitSequenceDef(
+        *result,
+        split.margin,
+        split.start_offset,
+        split.end_offset
+    )
+
+
+def train_val_test_boundaries(split:SplitSequenceDef, source_len: int):
+    """
+    provide boundaries for splitting sequenced data into train/val/test subsets
+    returned as tuple of three pairs start/end
+    """
+    split = split_to_abs(source_len, split)
+    train_start = 0
+    train_end = source_len - split.val_size - split.test_size
+    if split.val_size != 0:
+        train_end -= split.margin
+    if split.test_size != 0:
+        train_end -= split.margin
+    if split.val_size > 0:
+        val_start = train_end + split.margin
+        val_end = val_start + split.val_size
+    else:
+        val_start = train_end
+        val_end = train_end
+    if split.test_size > 0:
+        test_start = val_end + split.margin
+        test_end = test_start + split.test_size
+    if split.val_size == 0:
+        val_start = test_start
+        val_end = test_end
+    start_offset = split.start_offset or 0
+    end_offset = split.end_offset or 0
+
+    train_start += start_offset
+    val_start += start_offset
+    test_start += start_offset
+
+    train_end -= end_offset
+    val_end -= end_offset
+    test_end -= end_offset
+
+    return (
+        (train_start, train_end),
+        (val_start, val_end),
+        (test_start, test_end),
+    )
 
 
 class TrainDataProvider:
@@ -233,6 +319,144 @@ class TrainDataProvider:
             self._x(self.x_test , x_order),
             self._y(self.y_test , y_order),
         )
+
+
+class TrainSequenceProvider(TrainDataProvider):
+
+    def __init__(
+        self,
+        x_train : list,
+        y_train : list,
+        x_val   : list|int|float|None,
+        y_val   : list|None,
+        x_test  : list|int|float|None,
+        y_test  : list|None,
+        split   : SplitSequenceDef|None=None,
+        split_y : bool=True,
+        seq_len : int = None,
+        stride  : int = 1,
+        sampling_rate : int = 1,
+        shuffle : bool = False,
+        reverse : bool = False,
+        batch_size : int = 1,
+    ):
+        if seq_len is None:
+            raise ValueError("Specify 'seq_length'!")
+
+        self._batch_size = batch_size
+        self._seq_len = seq_len
+        self._stride = stride
+        self._sampling_rate = sampling_rate
+
+        super(TrainSequenceProvider, self).__init__(
+            x_train = None,
+            y_train = None,
+            x_val   = None,
+            y_val   = None,
+            x_test  = None,
+            y_test  = None,
+        )
+
+        if split is None:
+            train_se, val_se, test_se = (0, None), (0, None), (0, None)
+        else:
+            train_se, val_se, test_se = train_val_test_boundaries(split, len(x_train))
+            x_val  = x_train    # NOTE: start/end index would be used
+            x_test = x_train    # NOTE: start/end index would be used
+
+            if split_y:
+                y_val   = y_train   # NOTE: start/end index would be used
+                y_test  = y_train   # NOTE: start/end index would be used
+
+        self._train_gen = TimeseriesGenerator(
+            x_train,
+            y_train,
+            start_index = train_se[0],
+            end_index   = train_se[1],
+            length=self._seq_len,
+            stride=self._stride,
+            sampling_rate=self._sampling_rate,
+            shuffle=shuffle,
+            reverse=reverse,
+            batch_size=self._batch_size
+        )
+
+        self._val_gen = TimeseriesGenerator(
+            x_val,
+            y_val,
+            start_index = val_se[0],
+            end_index   = val_se[1],
+            length=self._seq_len,
+            stride=self._stride,
+            sampling_rate=self._sampling_rate,
+            shuffle=False,
+            reverse=reverse,
+            batch_size=max(1, val_se[1]- val_se[0])
+        )
+
+        self._val_xy = self._val_gen[0]
+
+        self._test_gen = TimeseriesGenerator(
+            x_test,
+            y_test,
+            start_index = test_se[0],
+            end_index   = test_se[1],
+            length=self._seq_len,
+            stride=self._stride,
+            sampling_rate=self._sampling_rate,
+            shuffle=False,
+            reverse=reverse,
+            batch_size=max(1, test_se[1]- test_se[0])
+        )
+
+        self._test_xy = self._test_gen[0]
+
+    @property
+    def seq_len(self):
+        return self._seq_len
+
+    @property
+    def batch_size(self):
+        return self._batch_size
+
+    @property
+    def x_train(self):
+        return self._train_gen
+
+    @property
+    def y_train(self):
+        return None
+
+    @property
+    def xy_train(self):
+        return self._train_gen
+
+    @property
+    def x_val(self):
+        return self._val_xy[0]
+
+    @property
+    def y_val(self):
+        return self._val_xy[1]
+
+    @property
+    def xy_val(self):
+        return self._val_xy
+
+    @property
+    def x_test(self):
+        return self._test_xy[0]
+
+    @property
+    def y_test(self):
+        return self._test_xy[1]
+
+    @property
+    def xy_test(self):
+        return self._test_xy
+
+    def all_as_tuple(self, x_order=None, y_order=None):
+        raise NotImplementedError("'all_as_tuple' is not implemented for 'TrainSequenceProvider'!")
 
 
 class ModelContext:
