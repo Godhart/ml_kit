@@ -527,13 +527,13 @@ class TextTrainDataProvider(TrainDataProvider):
                 self._x_train_bow = None
                 self._x_test_bow = None
                 self._x_val_bow = None
-                
+
         if not self._seq_train:
             # Save some RAM if sequences aren't required
             self._seq_train = None
             self._seq_val = None
             self._seq_test = None
-        
+
         # Save a bit more RAM since tokenizer isn't required anymore
         self._tokenizer = None
 
