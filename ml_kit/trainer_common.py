@@ -552,7 +552,7 @@ class ModelHandler():
         metrics         : list | None = None,
         model_template  : list | dict = None,
         model_variables : dict | None = None,
-        batch_size      : int = 10,
+        batch_size      : int  | None = 10,
         data_provider   : TrainDataProvider = None,
     ):
         if metrics is None:
@@ -739,7 +739,7 @@ class ClassClassifierHandler(ModelHandler):
         metrics         : list | None = None,
         model_template  : list = None,
         model_variables : dict | None = None,
-        batch_size      : int = 10,
+        batch_size      : int  | None = 10,
         data_provider   : TrainDataProvider = None,
         class_labels    : list[str] = None,
     ):
