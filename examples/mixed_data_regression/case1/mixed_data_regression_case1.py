@@ -385,7 +385,7 @@ if "y_train" not in locals():
 
 if "x_train_01" not in locals():
     x_train_01 = None
-    
+
 if "old_data_rows" not in locals():
     old_data_rows = None
 
@@ -871,12 +871,12 @@ if not old_data_used:
     del y_train_scaled
     del y_train_unscaled
     del y_train_scaler
-    
+
 if x_train_01 is None:
     for k in list(hyper_params_sets):
         if hyper_params_sets[k]['general_data_provider'] == general_data_old:
             del hyper_params_sets[k]
-    
+
 # -------------------------------------------------------------------------------------------------------------------- #
 
 # Создать вкладки для вывода результатов
@@ -905,7 +905,7 @@ for k, v in tabs_dict.items():
     tabs_objs[k].children = [v[kk] for kk in tab_items_keys]
     for i in range(0, len(tab_items_keys)):
         tabs_objs[k].set_title(i, f"{k}:{tab_items_keys[i]}")
-        
+
 # -------------------------------------------------------------------------------------------------------------------- #
 
 tabs_objs.keys()
