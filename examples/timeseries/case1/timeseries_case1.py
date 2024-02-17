@@ -467,10 +467,7 @@ for model_name in models:
             mhd.context.report_history = full_history
 
             # Воссоздать исходные данные, с которыми сравнивать результаты предсказаний
-            y_samples = y_scaler.inverse_transform(prepare_aux['y_samples_scaled'])
-            y_test_samples = y_samples[
-                prepare_aux['test_se'][0] + data_vars['seq_len'] - 1 : prepare_aux['test_se'][1]
-            ]
+            y_test_samples = y_scaler.inverse_transform(data_provider.y_test)
 
             # Вывод результатов во вкладки
             display_range = (0, 501)    # Диапазон по X для графиков значений
