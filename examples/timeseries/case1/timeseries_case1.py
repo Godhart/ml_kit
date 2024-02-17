@@ -300,14 +300,14 @@ def prepare_data(
         split,
         len(data),
     )
-    data_crop = split.y_end_offset-split.y_start_offset # Размер подрезаемых данных
+    data_crop = split.y_end_offset-split.y_start_offset+1 # Размер подрезаемых данных
 
     # Подготовка scalera на тренировочных данных
     x_rows = [LABEL_IDX[k] for k in x_cols]
     y_rows = [LABEL_IDX[k] for k in y_cols]
 
     x_data = data[
-        :[-data_crop,None][data_crop<=0],   # x_data будет использоваться совместно с y_samples_data, который будет подрезан
+        :-data_crop,    # x_data будет использоваться совместно с y_samples_data, который будет подрезан
         x_rows]
     y_data = data[:, y_rows]
 
@@ -325,7 +325,7 @@ def prepare_data(
 
     # Создание массива выходных данных
     y_samples_scaled = [
-        y_data_scaled[i + y_predict_range[0] : i + y_predict_range[1], : ] for i in range(y_data_scaled.shape[0])
+        y_data_scaled[i + split.y_start_offset : i + split.y_end_offset+1, : ] for i in range(y_data_scaled.shape[0])
     ]
     # Сдвиг на 1 элемент чтобы значение с индексом N следовало
     # сразу после последнего предиката из соответствующей входной последовательности (с индексом N-1)
