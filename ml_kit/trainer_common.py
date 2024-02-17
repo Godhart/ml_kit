@@ -1360,16 +1360,15 @@ if STANDALONE:
             )
 
             # Amount of last non-full items to be cropped
-            data_crop = split.y_end_offset-split.y_start_offset+1
+            data_crop = split.y_end_offset
 
             x_data = data[:-data_crop]
             y_data = [
-                data[ i + split.y_start_offset : i + split.y_end_offset + 1 ] for i in range(len(data))
+                data[ i + split.y_start_offset : i + split.y_end_offset + 1 ]
+                for i in range(len(data)-data_crop-1) # NOTE: -1 due to shift below
             ]
-            # NOTE: Required to shift y_data by a single sample
-            y_data.insert(0, y_data[0])
-            # Crop non-full items + 1 item due to the shift above
-            y_data = y_data[:-(data_crop+1)]
+
+            y_data.insert(0, y_data[0]) # NOTE: Required to shift y_data by a single sample (with any valid value)
 
             data_provider = TrainSequenceProvider(
                 x_train     = x_data,
