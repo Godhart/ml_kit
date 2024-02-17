@@ -1360,11 +1360,11 @@ if STANDALONE:
             )
 
             # Amount of last non-full items to be cropped
-            data_crop = split.y_end_offset-split.y_start_offset
+            data_crop = split.y_end_offset-split.y_start_offset+1
 
-            x_data = data[:[-data_crop,None][data_crop<=0]]
+            x_data = data[:-data_crop]
             y_data = [
-                data[i + predict_range[0] : i + predict_range[1] ] for i in range(len(data))
+                data[ i + split.y_start_offset : i + split.y_end_offset + 1 ] for i in range(len(data))
             ]
             # NOTE: Required to shift y_data by a single sample
             y_data.insert(0, y_data[0])
