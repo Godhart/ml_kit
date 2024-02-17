@@ -332,6 +332,8 @@ class TrainSequenceProvider(TrainDataProvider):
         shuffle : bool = False,
         reverse : bool = False,
         batch_size : int = 1,
+        soldify_val  : bool = True,
+        soldify_test : bool = True,
     ):
         if seq_len is None:
             raise ValueError("Specify 'seq_length'!")
@@ -387,7 +389,10 @@ class TrainSequenceProvider(TrainDataProvider):
             batch_size=max(1, val_se[1]- val_se[0])
         )
 
-        self._val_xy = self._val_gen[0]
+        if soldify_val:
+            self._val_xy = self._val_gen[0]
+        else:
+            self._val_xy = None
 
         self._test_gen = TimeseriesGenerator(
             x_test,
@@ -402,7 +407,11 @@ class TrainSequenceProvider(TrainDataProvider):
             batch_size=max(1, test_se[1]- test_se[0])
         )
 
-        self._test_xy = self._test_gen[0]
+        if soldify_test:
+            self._test_xy = self._test_gen[0]
+        else:
+            self._test_xy = None
+
 
     @property
     def seq_len(self):
@@ -426,27 +435,45 @@ class TrainSequenceProvider(TrainDataProvider):
 
     @property
     def x_val(self):
-        return self._val_xy[0]
+        if self._val_xy is not None:
+            return self._val_xy[0]
+        else:
+            return self._val_gen
 
     @property
     def y_val(self):
-        return self._val_xy[1]
+        if self._val_xy is not None:
+            return self._val_xy[1]
+        else:
+            return None
 
     @property
     def xy_val(self):
-        return self._val_xy
+        if self._val_xy is not None:
+            return self._val_xy
+        else:
+            return self._val_gen
 
     @property
     def x_test(self):
-        return self._test_xy[0]
+        if self._test_xy is not None:
+            return self._test_xy[0]
+        else:
+            return self._test_gen
 
     @property
     def y_test(self):
-        return self._test_xy[1]
+        if self._test_xy is not None:
+            return self._test_xy[1]
+        else:
+            return self._test_gen
 
     @property
     def xy_test(self):
-        return self._test_xy
+        if self._test_xy is not None:
+            return self._test_xy
+        else:
+            return self._test_gen
 
     def all_as_tuple(self, x_order=None, y_order=None):
         raise NotImplementedError("'all_as_tuple' is not implemented for 'TrainSequenceProvider'!")
