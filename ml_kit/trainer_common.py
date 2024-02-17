@@ -171,6 +171,9 @@ def train_val_test_boundaries(split:SplitSequenceDef, source_len: int):
     if split.test_size > 0:
         test_start = val_end + split.margin
         test_end = test_start + split.test_size
+    else:
+        test_start = val_end
+        test_end = val_end
     if split.val_size == 0:
         val_start = test_start
         val_end = test_end
