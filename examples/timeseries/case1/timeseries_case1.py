@@ -102,6 +102,17 @@ channel_names = ['Open', 'Max', 'Min', 'Close', 'Volume']
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
+ENV[ENV__DEBUG_PRINT] = True
+
+IDX_LABEL = {k:v for k,v in enumerate(channel_names)}
+LABEL_IDX = {v:k for k,v in IDX_LABEL.items()}
+
+# Подключение google диска если работа в ноутбуке
+if not STANDALONE:
+    connect_gdrive()
+
+# -------------------------------------------------------------------------------------------------------------------- #
+
 ###
 # Задача в целом:
 # - прогнозирование 'Close' из предыдущих 'Open', 'Max', 'Min', 'Close', 'Volume'
@@ -111,18 +122,6 @@ channel_names = ['Open', 'Max', 'Min', 'Close', 'Volume']
 #       - или сделать 10 вариантов с предсказанием одного значения но на N шагов вперёд?
 # - построить графики сравнения / корреляции
 # - обучить на разных архитектурах и сравнить
-
-IDX_LABEL = {k:v for k,v in enumerate(channel_names)}
-LABEL_IDX = {v:k for k,v in IDX_LABEL.items()}
-
-###
-# Решение задачи
-
-ENV[ENV__DEBUG_PRINT] = True
-
-# Подключение google диска если работа в ноутбуке
-if not STANDALONE:
-    connect_gdrive()
 
 # Перегрузка окружения под текущую задачу
 
