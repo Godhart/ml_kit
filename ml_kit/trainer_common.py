@@ -115,14 +115,14 @@ class SplitSequenceDef:
         val_size    : int | float | None,
         test_size   : int | float | None,
         margin      : int | None,
-        start_offset: int | None,
-        end_offset  : int | None,
+        y_start_offset: int | None,
+        y_end_offset  : int | None,
     ):
         self.val_size = val_size
         self.test_size = test_size
         self.margin = margin
-        self.start_offset = start_offset
-        self.end_offset = end_offset
+        self.y_start_offset = y_start_offset
+        self.y_end_offset = y_end_offset
 
 
 def split_to_abs(source_len, split:SplitSequenceDef):
@@ -145,8 +145,8 @@ def split_to_abs(source_len, split:SplitSequenceDef):
     return SplitSequenceDef(
         *result,
         split.margin,
-        split.start_offset,
-        split.end_offset
+        split.y_start_offset,
+        split.y_end_offset
     )
 
 
@@ -157,7 +157,7 @@ def train_val_test_boundaries(split:SplitSequenceDef, source_len: int):
     """
     split = split_to_abs(source_len, split)
     train_start = 0
-    train_end = source_len - split.val_size - split.test_size
+    train_end = source_len - split.val_size - split.test_size - max(split.y_start_offset or 0, split.y_end_offset or 0)
     if split.val_size != 0:
         train_end -= split.margin
     if split.test_size != 0:
@@ -174,16 +174,6 @@ def train_val_test_boundaries(split:SplitSequenceDef, source_len: int):
     if split.val_size == 0:
         val_start = test_start
         val_end = test_end
-    start_offset = split.start_offset or 0
-    end_offset = split.end_offset or 0
-
-    train_start += start_offset
-    val_start += start_offset
-    test_start += start_offset
-
-    train_end -= end_offset
-    val_end -= end_offset
-    test_end -= end_offset
 
     return (
         (train_start, train_end),
