@@ -1342,3 +1342,49 @@ if STANDALONE:
         mhd = thd.mhd
         mhd.predict(INPUT_DATA)
         ###
+
+    if True and __name__ == "__main__":
+        for predict_range in ((1,2), (5,6), (1, 6), ):
+            data = [i for i in range(0, 150)]
+            seq_len = 10
+            split = SplitSequenceDef(
+                val_size    = 0.1,
+                test_size   = 0.1,
+                margin      = seq_len*2,
+                y_start_offset= predict_range[0],
+                y_end_offset  = predict_range[1]-1
+            )
+            train_se, val_se, test_se = train_val_test_boundaries(
+                split,
+                len(data),
+            )
+
+            # Amount of last non-full items to be cropped
+            data_crop = split.y_end_offset-split.y_start_offset
+
+            x_data = data[:[-data_crop,None][data_crop<=0]]
+            y_data = [
+                data[i + predict_range[0] : i + predict_range[1] ] for i in range(len(data))
+            ]
+            # NOTE: Required to shift y_data by a single sample
+            y_data.insert(0, y_data[0])
+            # Crop non-full items + 1 item due to the shift above
+            y_data = y_data[:-(data_crop+1)]
+
+            data_provider = TrainSequenceProvider(
+                x_train     = x_data,
+                y_train     = y_data,
+                x_val       = None,
+                y_val       = None,
+                x_test      = None,
+                y_test      = None,
+                split       = split,
+                seq_len     = seq_len,
+                stride      = 1,
+                sampling_rate = 1,
+                shuffle     = False,
+                batch_size  = 50,
+            )
+            train_sample    = [x for x in data_provider.xy_train]
+            val_sample      = [x for x in data_provider.xy_val]
+            test_sample     = [x for x in data_provider.xy_test]
