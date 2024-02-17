@@ -383,6 +383,7 @@ for model_name in models:
             model_data = models[model_name]
 
             run_name = f"{model_name}--{hp_name}"
+            print(f"Running {run_name}")
 
             data_vars = hp['data_vars']
             data = data_vars['source']
