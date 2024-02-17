@@ -300,12 +300,15 @@ def prepare_data(
         split,
         len(data),
     )
+    data_crop = split.y_end_offset-split.y_start_offset # Размер подрезаемых данных
 
     # Подготовка scalera на тренировочных данных
     x_rows = [LABEL_IDX[k] for k in x_cols]
     y_rows = [LABEL_IDX[k] for k in y_cols]
 
-    x_data = data[:, x_rows]
+    x_data = data[
+        :[-data_crop,None][data_crop<=0],   # x_data будет использоваться совместно с y_samples_data, который будет подрезан
+        x_rows]
     y_data = data[:, y_rows]
 
     x_data_train = x_data[train_se[0]:train_se[1], :]
@@ -321,14 +324,14 @@ def prepare_data(
     y_data_scaled = y_scaler.transform(y_data)
 
     # Создание массива выходных данных
-    y_prediction_width = y_predict_range[1] - y_predict_range[0]
     y_samples_scaled = [
-        y_data_scaled[i : i+y_prediction_width - 1, : ] for i in range(y_data_scaled.shape[0])
+        y_data_scaled[i + y_predict_range[0] : i + y_predict_range[1], : ] for i in range(y_data_scaled.shape[0])
     ]
-    # Сдвиг на 1 элемент чтобы значения с индексом N следовало
+    # Сдвиг на 1 элемент чтобы значение с индексом N следовало
     # сразу после последнего предиката из соответствующей входной последовательности (с индексом N-1)
     y_samples_scaled.insert(0, y_samples_scaled[0])
-    y_samples_scaled.pop()
+    # обрезать неполные элементы в конце + один элемент из-за сдвига
+    y_samples_scaled = y_samples_scaled[:-(data_crop+1)]
     # Перевод результата в np.array
     y_samples_scaled = np.array(y_samples_scaled)
     y_samples_scaled = np.reshape(y_samples_scaled, y_samples_scaled.shape[:2])
