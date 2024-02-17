@@ -300,7 +300,7 @@ def prepare_data(
         split,
         len(data),
     )
-    data_crop = split.y_end_offset-split.y_start_offset+1 # Размер подрезаемых данных
+    data_crop = split.y_end_offset  # Размер подрезаемых данных
 
     # Подготовка scalera на тренировочных данных
     x_rows = [LABEL_IDX[k] for k in x_cols]
@@ -325,13 +325,12 @@ def prepare_data(
 
     # Создание массива выходных данных
     y_samples_scaled = [
-        y_data_scaled[i + split.y_start_offset : i + split.y_end_offset+1, : ] for i in range(y_data_scaled.shape[0])
+        y_data_scaled[i + split.y_start_offset : i + split.y_end_offset+1, : ]
+        for i in range(y_data_scaled.shape[0]-data_crop-1)
     ]
     # Сдвиг на 1 элемент чтобы значение с индексом N следовало
     # сразу после последнего предиката из соответствующей входной последовательности (с индексом N-1)
     y_samples_scaled.insert(0, y_samples_scaled[0])
-    # обрезать неполные элементы в конце + один элемент из-за сдвига
-    y_samples_scaled = y_samples_scaled[:-(data_crop+1)]
     # Перевод результата в np.array
     y_samples_scaled = np.array(y_samples_scaled)
     y_samples_scaled = np.reshape(y_samples_scaled, y_samples_scaled.shape[:2])
