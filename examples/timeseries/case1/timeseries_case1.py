@@ -226,7 +226,7 @@ hp_template = to_dict(
     data_vars={
         **data_common_vars,
         **to_dict(
-            predict_range = (1,1),
+            predict_range = (1,2),
         )
     },
 )
@@ -236,7 +236,7 @@ hyper_params_sets = {}
 
 for i in range(1,11):
     hp =copy.deepcopy(hp_template)
-    hp['data_vars']['predict_range'] = (i, i)
+    hp['data_vars']['predict_range'] = (i, i+1)
     hyper_params_sets[f"n{i}"] = hp
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -290,7 +290,7 @@ def prepare_data(
     """
     Подготовка данных исходя из условий задачи и гиперпараметров
     """
-    y_prediction_range  = data_vars['predict_range']
+    y_predict_range     = data_vars['predict_range']
     seq_len             = data_vars['seq_len']
     x_scaler_class      = data_vars['x_scaler']
     y_scaler_class      = data_vars['y_scaler']
@@ -309,7 +309,7 @@ def prepare_data(
     y_data = data[:, y_rows]
 
     x_data_train = x_data[train_se[0]:train_se[1], :]
-    y_data_train = y_data[train_se[0]+split.start_offset : train_se[1]+split.end_offset, :]
+    y_data_train = y_data[train_se[0]+split.y_start_offset : train_se[1]+split.y_end_offset, :]
 
     # Нормализация данных
     x_scaler = x_scaler_class()
@@ -321,8 +321,9 @@ def prepare_data(
     y_data_scaled = y_scaler.transform(y_data)
 
     # Создание массива выходных данных
+    y_prediction_width = y_predict_range[1] - y_predict_range[0]
     y_samples_scaled = [
-        y_data_scaled[i+y_prediction_range[0]:i+y_prediction_range[1]+1,:] for i in range(y_data_scaled.shape[0])
+        y_data_scaled[i : i+y_prediction_width - 1, : ] for i in range(y_data_scaled.shape[0])
     ]
     # Сдвиг на 1 элемент чтобы значения с индексом N следовало
     # сразу после последнего предиката из соответствующей входной последовательности (с индексом N-1)
@@ -388,8 +389,8 @@ for model_name in models:
                 val_size    = data_vars['val_size'],
                 test_size   = data_vars['test_size'],
                 margin      = data_vars['seq_len']*2,
-                start_offset= 0,
-                end_offset  = max(0, max(*data_vars['predict_range']))
+                y_start_offset= data_vars['predict_range'][0],
+                y_end_offset  = data_vars['predict_range'][1]-1
             )
 
             data_provider, x_scaler, y_scaler, input_shape, prepare_aux = prepare_data(
@@ -402,7 +403,7 @@ for model_name in models:
 
             model_vars = copy.deepcopy(hp['model_vars'])
             model_vars['branch_general_input_shape'] = input_shape
-            model_vars['output_neurons'] = data_vars['predict_range'][1] - data_vars['predict_range'][0] + 1
+            model_vars['output_neurons'] = data_vars['predict_range'][1] - data_vars['predict_range'][0]
             if isinstance(y_scaler, MinMaxScaler):
                 model_vars['auto_output_activation'] = 'relu'
                 # TODO: also it could be sigmoid
