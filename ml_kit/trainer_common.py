@@ -490,6 +490,7 @@ class ModelContext:
 
     _hist_figsize           = (8, 3)
     _extra_dump_vars        = tuple()
+    _plot_cols              = 2
 
     def __init__(
         self,
@@ -589,22 +590,31 @@ class ModelContext:
         plot_history = self.report_history or self.history
         if plot_history is not None:
             print_metrics = [S_LOSS] + [m for m in self._metrics if m in plot_history]
-            cols = 2
+            cols = self._plot_cols
             rows = (len(print_metrics)+cols-1) // cols
             figsize = (self._hist_figsize[0]*cols, self._hist_figsize[1]*rows)
             fig, subplots = plotter.subplots(rows, cols, figsize=figsize)
             fig.suptitle('График процесса обучения модели')
-            subplot_i = 0
+            s_col = 0
+            s_row = 0
             for metric in print_metrics:
-                subplot = subplots[subplot_i]
-                subplot_i += 1
+                if cols > 1:
+                    subplot = subplots[s_row, s_col]
+                else:
+                    subplot = subplots[s_row]
+                s_col += 1
+                if s_col >= cols:
+                    s_col = 0
+                    s_row += 1
                 metric_t = METRICS_T.get(metric, metric).capitalize()
-                subplot.plot(plot_history[metric],
+                x_vals = list(range(1, len(plot_history[metric])+1))
+                subplot.plot(x_vals, plot_history[metric],
                         label=metric_t + ' на обучающем наборе')
-                subplot.plot(plot_history['val_'+metric],
+                subplot.plot(x_vals, plot_history['val_'+metric],
                         label=metric_t + ' на проверочном наборе')
                 subplot.xaxis.get_major_locator().set_params(integer=True)
                 subplot.set_xlabel('Эпоха обучения')
+                subplot.set_xlim(1, len(plot_history[metric]))
                 subplot.set_ylabel(metric_t)
                 subplot.legend()
             plot_f(*plot_hist_args)
