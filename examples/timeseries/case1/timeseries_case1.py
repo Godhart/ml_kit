@@ -100,6 +100,29 @@ data = pd.concat([data16_17, data18_19]).to_numpy()
 
 channel_names = ['Open', 'Max', 'Min', 'Close', 'Volume']
 
+if True:
+    # Проверка на тестовых данных
+    j=11
+    n=0
+    test_data = []
+    for i in range(10000):
+        if True:
+            test_data.append([n,n,n,n,n])
+        else:
+            if n < j-1:
+                test_data.append([n,n,n,n,1.])
+            else:
+                test_data.append([n,n,n,n,0.])
+        n += 1
+        if n >= j:
+            n = 0
+            j += 7
+        if j > 256:
+            j = 1
+
+    data = pd.DataFrame(test_data, columns=['OPEN', 'MAX', 'MIN', 'CLOSE', 'VOLUME']).to_numpy()
+
+
 # -------------------------------------------------------------------------------------------------------------------- #
 
 ENV[ENV__DEBUG_PRINT] = True
@@ -123,15 +146,77 @@ if not STANDALONE:
 # - построить графики сравнения / корреляции
 # - обучить на разных архитектурах и сравнить
 
-# Перегрузка окружения под текущую задачу
+# Специальные функции для формирования метрик при обучении
+import keras.backend as K
 
-ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_8_lite_1a"
+def correlation_K(a, b):
+    """
+    Функция расчета корреляционного коэффициента Пирсона для двух рядов
+    """
+    # TODO:
+    a_mean = K.mean(a)
+    b_mean = K.mean(b)
+    ab_mean = K.mean(a*b)
+    a_std = K.std(a)
+    b_std = K.std(b)
+    corr = (ab_mean - a_mean*b_mean)/(a_std*b_std)
+    return corr
+
+def correlation_graph_K(a, b, data_start, data_end, graph_range):
+    if isinstance(graph_range, int):
+        graph_range = (0, graph_range)
+    result = []
+    negative_range = (graph_range[0], -1)
+    positive_range = (0, graph_range[1])
+    for start, end in (negative_range, positive_range,):
+        if start < 0:
+            aa = b
+            bb = a
+            mult = -1
+        else:
+            aa = a
+            bb = b
+            mult = 1
+        for i in range(start, end+1):
+            result.append(
+                correlation_K(
+                    aa[data_start:data_end - mult*i],
+                    bb[data_start + mult*i:data_end]
+                )
+            )
+
+    return result
+
+def correlation_peak_K(a, b):
+    peak_search_range = (-70, 70)
+    cv = correlation_graph_K(a, b, 0, -1, peak_search_range)
+    peak = K.argmax(cv) + peak_search_range[0]
+    return peak
+
+S_CORRELATION = 'correlation_K'
+METRICS[S_CORRELATION] = {
+    S_COMPARE   : S_GE,
+    S_FUNCTION  : correlation_K,
+    S_FALLBACK  : 0.0
+}
+METRICS_T[S_CORRELATION] = "корреляция"
+
+S_CORRELATION_PEAK = 'correlation_peak_K'
+METRICS[S_CORRELATION_PEAK] = {
+    S_COMPARE   : S_LE,
+    S_FUNCTION  : correlation_peak_K,
+    S_FALLBACK  : 70
+}
+METRICS_T[S_CORRELATION_PEAK] = "пик корреляции"
+
+# Перегрузка окружения под текущую задачу
+ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_8_lite_1b"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-4)]
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = S_MSE
-ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_ACCURACY]
+ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_CORRELATION, S_CORRELATION_PEAK, S_MAE]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 128
-ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 2 # TODO: 50
-ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_ACCURACY: 1}
+ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 10 # TODO: 50
+ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_CORRELATION: 1, S_CORRELATION_PEAK: 0, S_MAE: 0}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
@@ -471,7 +556,7 @@ for model_name in models:
 
             # Вывод результатов во вкладки
             display_range = (0, 501)    # Диапазон по X для графиков значений
-            cg_range = (-120, 120)      # Диапазон для графиков корреляции
+            cg_range = (-30, 30)        # Диапазон для графиков корреляции
             assert y_test_samples.shape == pred_best.shape, "Something went wrong!"
             assert y_test_samples.shape == pred_last.shape, "Something went wrong!"
 
@@ -494,8 +579,39 @@ for model_name in models:
                         print(f"Корреляция на последней эпохе ({epoch_last}): {correlation(y_test_samples[:, 0], pred_last[:, 0])}")
                         print("")
 
-                        # Графики значений исходных / предсказанных
+                        # Подготовка данных для анализа корреляции
+                        cg_auto = correlation_graph(
+                            y_test_samples[:, 0],
+                            y_test_samples[:, 0],
+                            0,
+                            y_test_samples.shape[0],
+                            cg_range
+                        )
 
+                        cg_best = correlation_graph(
+                            y_test_samples[:, 0],
+                            pred_best     [:, 0],
+                            0,
+                            y_test_samples.shape[0],
+                            cg_range
+                        )
+                        cg_best_peak = np.argmax(cg_best)+cg_range[0]
+
+                        cg_last = correlation_graph(
+                            y_test_samples[:, 0],
+                            pred_last     [:, 0],
+                            0,
+                            y_test_samples.shape[0],
+                            cg_range
+                        )
+                        cg_last_peak = np.argmax(cg_last)+cg_range[0]
+
+
+                        print(f"Пик корреляции на 'лучшей' эпохе  ({epoch_best}): {cg_best_peak}")
+                        print(f"Пик корреляции на последней эпохе ({epoch_last}): {cg_last_peak}")
+                        print("")
+
+                        # Графики значений исходных / предсказанных
                         graph_data = [
                                 y_test_samples[:, 0],
                                 pred_best     [:, 0],
@@ -514,7 +630,7 @@ for model_name in models:
                         )
                         if epoch_last == epoch_best:
                             del graph_def.idx_label[2]
-                        fig, subplots = plt.subplots(1, 1, figsize=(22,13))
+                        fig, subplots = plt.subplots(1, 1, figsize=(10,6))
                         plot_graph(
                             subplots,
                             graph_data,
@@ -527,31 +643,7 @@ for model_name in models:
                         plt.show()
 
 
-                        # Графики корреляции
-                        cg_auto = correlation_graph(
-                            y_test_samples[:, 0],
-                            y_test_samples[:, 0],
-                            0,
-                            y_test_samples.shape[0],
-                            cg_range
-                        )
-
-                        cg_best = correlation_graph(
-                            y_test_samples[:, 0],
-                            pred_best     [:, 0],
-                            0,
-                            y_test_samples.shape[0],
-                            cg_range
-                        )
-
-                        cg_last = correlation_graph(
-                            y_test_samples[:, 0],
-                            pred_last     [:, 0],
-                            0,
-                            y_test_samples.shape[0],
-                            cg_range
-                        )
-
+                        # Графики корреляции (отрисовка)
                         cg_x = list(range(cg_range[0], cg_range[1]+1))
                         graph_data = [
                                 [cg_x, cg_auto],
@@ -571,7 +663,7 @@ for model_name in models:
                         )
                         if epoch_last == epoch_best:
                             del graph_def.idx_label[2]
-                        fig, subplots = plt.subplots(1, 1, figsize=(22,13))
+                        fig, subplots = plt.subplots(1, 1, figsize=(10,6))
                         plot_graph(
                             subplots,
                             graph_data,
