@@ -74,6 +74,8 @@ S_REGRESSION = "regression"
 MAE_MAX = float(2**31-1)
 
 S_COMPARE = "compare"
+S_FUNCTION = "function"
+S_FALLBACK = "fallback"
 S_GE = "ge"
 S_LE = "le"
 
@@ -82,10 +84,17 @@ METRICS = {
     S_MAE       : {S_COMPARE: S_LE},
 }
 
+# Metrics translation / full sentence
 METRICS_T = {
     S_ACCURACY  : "доля верных ответов",
     S_MAE       : "средняя абсолютная ошибка",
     S_LOSS      : "ошибка",
+}
+
+# Default fallback based on compare function
+METRICS_F = {
+    S_GE        : 0.0,
+    S_LE        : 2**31,
 }
 
 
@@ -505,8 +514,7 @@ class ModelContext:
         reports             : list[str] | None = None,
         history             = None,
         test_pred           = None,
-        test_accuracy       : float | None = None,
-        test_mae            : float | None = None,
+        eval_data           = None,
     ):
         self.name           = name
         self.model_class    = model_class
@@ -520,38 +528,11 @@ class ModelContext:
         self.history        = history
         self.report_history = None
         self.test_pred      = test_pred
-        self._test_accuracy = test_accuracy
-        self._test_mae      = test_mae
-
-    @property
-    def history(self):
-        return self._history
-
-    @history.setter
-    def history(self, value):
-        self._history = value
-
-    @property
-    def accuracy(self):
-        if self._history is None:
-            return 0.0
-        return float(self._history.get("val_accuracy", [0.0])[-1])
-
-    @property
-    def mae(self):
-        if self._history is None:
-            return MAE_MAX
-        return float(self._history.get("val_mae", [MAE_MAX])[-1])
+        self.eval_data      = eval_data
 
     @property
     def metrics(self):
-        result = {}
-        for metric in self._metrics:
-            if hasattr(self, metric):
-                result[metric] = getattr(self, metric)
-            else:
-                result[metric] = None
-        return result
+        return self._metrics
 
     @metrics.setter
     def metrics(self, value):
@@ -561,30 +542,66 @@ class ModelContext:
         self._metrics = [v for v in value if isinstance(v, str)]
 
     @property
-    def test_accuracy(self):
-        if self._test_accuracy is None:
-            return None
-        return float(self._test_accuracy)
+    def history(self):
+        return self._history
 
-    @test_accuracy.setter
-    def test_accuracy(self, value):
-        self._test_accuracy = value
+    @history.setter
+    def history(self, value):
+        self._history = value
+
+    def get_metric_value(self, metric, fallback=False):
+        if metric not in self._metrics:
+            return None
+        val_metric = 'val_'+metric
+        if self._history is None or val_metric not in self._history or len(self._history[val_metric]) == 0:
+            value = None
+        else:
+            value = self._history[val_metric][-1]
+        if value is None and fallback:
+            value = METRICS[metric].get(S_FALLBACK, METRICS_F[METRICS[metric].get(S_COMPARE, S_GE)])
+        return value
 
     @property
-    def test_mae(self):
-        if self._test_mae is None:
-            return None
-        return float(self._test_mae)
+    def metrics_data(self):
+        result = {}
+        for metric in self._metrics:
+            result[metric] = self.get_metric_value(metric)
+        return result
 
-    @test_mae.setter
-    def test_mae(self, value):
-        self._test_mae = value
+    @property
+    def eval_data(self):
+        return copy.deepcopy(self._eval_data)
+
+    @eval_data.setter
+    def eval_data(self, value):
+        self._eval_data = {}
+        for k in self._metrics:
+            if value is None:
+                self._eval_data[k] = None
+            elif k in value:
+                self._eval_data[k] = value[k]
+            else:
+                self._eval_data[k] = METRICS[k].get(S_FALLBACK, METRICS_F[METRICS[k].get(S_COMPARE, S_GE)])
+
+    def get_eval_value(self, metric, fallback=False):
+        if metric not in self._metrics:
+            return None
+        value = self._eval_data.get(metric, None)
+        if value is None and fallback:
+            value = METRICS[metric].get(S_FALLBACK, METRICS_F[METRICS[metric].get(S_COMPARE, S_GE)])
+        return value
 
     @property
     def epoch(self):
         if self._history is None:
             return 0
         return len(self._history[S_LOSS])
+
+    @property
+    def val_loss(self):
+        if self._history is None or len(self._history['val_'+S_LOSS])==0:
+            return None
+        return self._history['val_'+S_LOSS][-1]
 
     def _plot_images(self, plotter, plot_f, plot_hist_args):
         plot_history = self.report_history or self.history
@@ -632,6 +649,8 @@ class ModelContext:
             extra_model_data = {}
         with open(path / f"epoch-{self.epoch}", "w") as f:
             pass
+        metrics_data = self.metrics_data
+        eval_data    = self.eval_data
         dump_data = {
             "name"          : self.name,
             "model_class"   : self.model_class,
@@ -639,16 +658,17 @@ class ModelContext:
             "epoch"         : self.epoch,
             "loss"          : self.loss,
             "metrics"       : self._metrics,
+            "val_loss"      : self.val_loss,
+            "metrics_data"  :      metrics_data,
+            "eval_data"     :      eval_data,
         }
-        for metric in self._metrics:
-            if hasattr(self, metric):
-                with open(path / safe_path(f"val_{metric}-{getattr(self, metric)}"), "w") as f:
-                    pass
-                dump_data['val_'+metric] = getattr(self, metric)
-            if hasattr(self, 'test_'+metric):
-                with open(path / safe_path(f"test_{metric}-{getattr(self, 'test_'+metric)}"), "w") as f:
-                    pass
-                dump_data['test_'+metric] = getattr(self, 'test_'+metric)
+        for metric, value in metrics_data.items():
+            with open(path / safe_path(f"val_{metric}-{value}"), "w") as f:
+                pass
+        for metric, value in eval_data.items():
+            with open(path / safe_path(f"test_{metric}-{value}"), "w") as f:
+                pass
+
         for v in self._extra_dump_vars:
             dump_data[v] = getattr(self, v)
         dump_data['model_template'] = self.model_template
@@ -668,13 +688,9 @@ class ModelContext:
     def report_to_screen(self):
         print(self.short_report())
         print(f"train epoch={self.epoch}")
-        for metric in self._metrics:
-            if metric not in self._history:
-                continue
-            if hasattr(self, metric):
-                print(f"'val_{metric}' = {getattr(self, metric)}")
-            if hasattr(self, 'test_'+metric):
-                print(f"test_{metric} = {getattr(self, 'test_'+metric)}")
+        for metric in self.metrics:
+            print(f"'val_{metric}'  = {self.get_metric_value(metric)}")
+            print(f"'test_{metric}' = {self.get_eval_value(metric)}")
         self._plot_images(plt, plt.show, [])
 
 
@@ -703,8 +719,7 @@ class ClassClassifierContext(ModelContext):
         reports             : list[str] | None = None,
         history             = None,
         test_pred           = None,
-        test_accuracy       : float | None = None,
-        test_mae            : float | None = None,
+        eval_data           = None,
 
         class_labels        : list[str] | None = None,
         cm                  = None,
@@ -721,8 +736,7 @@ class ClassClassifierContext(ModelContext):
             reports        = reports,
             history        = history,
             test_pred      = test_pred,
-            test_accuracy  = test_accuracy,
-            test_mae       = test_mae,
+            eval_data      = eval_data,
         )
         self.class_labels   = class_labels
         self.cm             = cm
@@ -897,6 +911,9 @@ class ModelHandler():
 
     @history.setter
     def history(self, value):
+        if value is None:
+            self._context.history = None
+            return
         if self._context.history is None:
             self._context.history = {}
             for k in value:
@@ -911,6 +928,14 @@ class ModelHandler():
             self.model_template,
             **self.model_variables
         )
+        def get_metrics(metrics):
+            result = []
+            for metric in metrics:
+                if S_FUNCTION in METRICS[metric]:
+                    result.append(METRICS[metric][S_FUNCTION])
+                else:
+                    result.append(metric)
+            return result
         self._model         = mc[S_MODEL]
         self._context.inputs_order  = mc[S_INPUTS]
         if isinstance(self.context.optimizer, (list, tuple)):
@@ -922,7 +947,7 @@ class ModelHandler():
         self._model.compile(
             optimizer=optimizer,
             loss=self.context.loss,
-            metrics=list(self.context.metrics.keys()),
+            metrics=get_metrics(self.context.metrics),
         )
 
     def fit(self, epochs, initial_epoch=None):
@@ -937,9 +962,7 @@ class ModelHandler():
             **kwargs,
         ).history
         self._context.test_pred = None
-        for m in self._context.metrics:
-            if hasattr(self._context, 'test_'+m):
-                setattr(self._context, 'test_'+m, None)
+        self._context.eval_data = None
         return self.history
 
     def predict(self, data):
@@ -959,18 +982,20 @@ class ModelHandler():
         with open(path / "context.pickle", "rb") as f:
             self._context = pickle.load(f)
         if not dont_load_model:
-            self._model = load_model(path / "model.keras")
+            custom_objects = {}
+            for metric in self.metrics:
+                if S_FUNCTION in METRICS[metric]:
+                    custom_objects[metric] = METRICS[metric][S_FUNCTION]
+            self._model = load_model(
+                path / "model.keras",
+                custom_objects=custom_objects,
+            )
 
     def update_data(self, force=False):
         if self._context.test_pred is None or force:
             self._context.test_pred  = self.predict(self.data_provider.x_test)
 
-        for m in self._context.metrics:
-            if hasattr(self, 'test_'+m):
-                if getattr(self._context, 'test_'+m) is None:
-                    setattr(self._context, 'test_'+m, None) # TODO:
-                else:
-                    print(f"WARNING: metric property 'test_{m}' is not implemented, but should be! Do this ASAP!")
+        self._context.eval_data = None # TODO:
 
     def unload_model(self):
         self._model = None
@@ -1035,8 +1060,8 @@ class ClassClassifierHandler(ModelHandler):
                                 normalize='true')
             self._context.cm = np.around(self._context.cm, self._cm_round)
 
-        if self._context.test_accuracy is None:
-            self._context.test_accuracy = self._context.cm.diagonal().mean()
+        if S_ACCURACY in self._context._eval_data:
+            self._context._eval_data[S_ACCURACY] = self._context.cm.diagonal().mean()
 
 
 class TrainHandler:
@@ -1187,10 +1212,18 @@ class TrainHandler:
         enough = True
         for metric in METRICS:
             if metric in target:
-                if METRICS[metric][S_COMPARE] == S_GE:
-                    if not getattr(self.mhd.context, metric) >= target[metric]:
+                cmp = METRICS[metric][S_COMPARE]
+                value = self.mhd.context.get_metric_value(metric, fallback=True)
+                if cmp == S_GE:
+                    if value < target[metric]:
                         enough = False
                         break
+                elif cmp == S_LE:
+                    if value > target[metric]:
+                        enough = False
+                        break
+                else:
+                    raise ValueError(f"Unknown compare function '{cmp}' for metric '{metric}'!")
         return enough
 
     def train(
@@ -1207,7 +1240,13 @@ class TrainHandler:
             # NOTE: used only to load data and hold best value
             data_path       = self.data_path,
             data_name       = self.data_name,
-            mhd             = self._mhd_class(name=self.data_name, model_class=None, optimizer=None, loss=None)
+            mhd             = self._mhd_class(
+                name=self.data_name,
+                model_class=None,
+                optimizer=None,
+                loss=None,
+                metrics=self._mhd.metrics,
+            ),
         )
 
         if from_scratch is not True:
@@ -1236,7 +1275,7 @@ class TrainHandler:
 
         if  self.mhd.context.epoch < epochs and not self.is_enough(target):
             display_callback(f"Starting to train from epoch {self.mhd.context.epoch}, max epoch: {epochs}, "
-                f", target: {target}, metrics: {self.mhd.context.metrics}")
+                f", target: {target}, metrics: {self.mhd.context.metrics_data}")
 
             next_save = self.mhd.context.epoch + save_step
 
@@ -1249,8 +1288,8 @@ class TrainHandler:
                 best_metrics = []
                 for metric in self.mhd.context.metrics:
                     display_metrics.append(metric)
-                    current_metrics.append(str(getattr(self.mhd.context, metric)))
-                    best_metrics.append(str(getattr(best.mhd.context, metric)))
+                    current_metrics.append(str(self.mhd.context.get_metric_value(metric)))
+                    best_metrics.append(str(best.mhd.context.get_metric_value(metric)))
 
                 display_callback(
                     f"epoch/{'/'.join(display_metrics)}: "
@@ -1262,20 +1301,28 @@ class TrainHandler:
                 else:
                     initial_epoch = None
                 self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch)
-                # NOTE: fit() would affect .epoch, .accuracy and other metrics fields
+                # NOTE: fit() would affect .epoch, and other metrics fields
 
-                if "accuracy" in self.mhd.context.metrics:
-                    if best.mhd.context.accuracy <= 0 \
-                    or self.mhd.context.accuracy > best.mhd.context.accuracy + 0.01:
-                        self.mhd.update_data()
-                        self.save(S_BEST)
-                        best.mhd.context.history = copy.deepcopy(self.mhd.context.history)
-                if "mae" in self.mhd.context.metrics:
-                    if best.mhd.context.mae >= MAE_MAX \
-                    or self.mhd.context.mae < best.mhd.context.mae:
-                        self.mhd.update_data()
-                        self.save(S_BEST)
-                        best.mhd.context.history = copy.deepcopy(self.mhd.context.history)
+                is_better = False
+                for metric in self.mhd.context.metrics:
+                    current_value = self.mhd.context.get_metric_value(metric, fallback=True)
+                    best_value = best.mhd.context.get_metric_value(metric, fallback=True)
+                    cmp = METRICS[metric][S_COMPARE]
+                    if cmp == S_GE:
+                        if current_value > best_value:
+                            is_better = True
+                            break
+                    elif cmp == S_LE:
+                        if current_value < best_value:
+                            is_better = True
+                            break
+                    else:
+                        raise ValueError(f"Unknown compare function '{cmp}' for metric '{metric}'!")
+
+                if is_better:
+                    self.mhd.update_data()
+                    self.save(S_BEST)
+                    best.mhd.context.history = copy.deepcopy(self.mhd.context.history)
 
                 if self.mhd.context.epoch == next_save:
                     self.mhd.update_data()
