@@ -146,69 +146,6 @@ if not STANDALONE:
 # - построить графики сравнения / корреляции
 # - обучить на разных архитектурах и сравнить
 
-# Специальные функции для формирования метрик при обучении
-import keras.backend as K
-
-def correlation_K(a, b):
-    """
-    Функция расчета корреляционного коэффициента Пирсона для двух рядов
-    """
-    # TODO:
-    a_mean = K.mean(a)
-    b_mean = K.mean(b)
-    ab_mean = K.mean(a*b)
-    a_std = K.std(a)
-    b_std = K.std(b)
-    corr = (ab_mean - a_mean*b_mean)/(a_std*b_std)
-    return corr
-
-def correlation_graph_K(a, b, data_start, data_end, graph_range):
-    if isinstance(graph_range, int):
-        graph_range = (0, graph_range)
-    result = []
-    negative_range = (graph_range[0], -1)
-    positive_range = (0, graph_range[1])
-    for start, end in (negative_range, positive_range,):
-        if start < 0:
-            aa = b
-            bb = a
-            mult = -1
-        else:
-            aa = a
-            bb = b
-            mult = 1
-        for i in range(start, end+1):
-            result.append(
-                correlation_K(
-                    aa[data_start:data_end - mult*i],
-                    bb[data_start + mult*i:data_end]
-                )
-            )
-
-    return result
-
-def correlation_peak_K(a, b):
-    peak_search_range = (-70, 70)
-    cv = correlation_graph_K(a, b, 0, -1, peak_search_range)
-    peak = K.argmax(cv) + peak_search_range[0]
-    return peak
-
-S_CORRELATION = 'correlation_K'
-METRICS[S_CORRELATION] = {
-    S_COMPARE   : S_GE,
-    S_FUNCTION  : correlation_K,
-    S_FALLBACK  : 0.0
-}
-METRICS_T[S_CORRELATION] = "корреляция"
-
-S_CORRELATION_PEAK = 'correlation_peak_K'
-METRICS[S_CORRELATION_PEAK] = {
-    S_COMPARE   : S_LE,
-    S_FUNCTION  : correlation_peak_K,
-    S_FALLBACK  : 70
-}
-METRICS_T[S_CORRELATION_PEAK] = "пик корреляции"
-
 # Перегрузка окружения под текущую задачу
 ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_8_lite_1b"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-4)]
@@ -285,7 +222,7 @@ models = to_dict(
 # Гиперпараметры
 
 hp_defaults = to_dict(
-        tabs=['learn', 'correlation',],
+        tabs=['learn', 'corel', 'corel-s'],
 )
 
 data_common_vars=to_dict(
@@ -319,7 +256,7 @@ hp_template = to_dict(
 
 hyper_params_sets = {}
 
-for i in range(1,11):
+for i in range(1,11,9):
     hp =copy.deepcopy(hp_template)
     hp['data_vars']['predict_range'] = (i, i+1)
     hyper_params_sets[f"n{i}"] = hp
@@ -328,6 +265,9 @@ for i in range(1,11):
 
 ###
 # Создать вкладки для вывода результатов
+
+def get_tab(tab_id, model_name, hp_name, hp):
+  return tab_id, f"{model_name}-{hp_name}"
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
@@ -338,8 +278,7 @@ tabs_dict = {}
 for model_name in models:
     for hp_name, hp in hyper_params_sets.items():
         for tab_id in hp['tabs']:
-            tab_group = model_name+"-"+tab_id
-            tab_i = hp_name
+            tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
             if tab_group not in tabs_dict:
                 tabs_dict[tab_group] = {}
             widget = tabs_dict[tab_group][tab_i] = widgets.Output()
@@ -561,8 +500,7 @@ for model_name in models:
             assert y_test_samples.shape == pred_last.shape, "Something went wrong!"
 
             for tab_id in hp['tabs']:
-                tab_group = model_name+"-"+tab_id
-                tab_i     = hp_name
+                tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
                 with tabs_dict[tab_group][tab_i]:
                     clear_output()
                     print(f"Модель         : {hp['model']}")
@@ -574,34 +512,43 @@ for model_name in models:
 
                         utils.plot_model(mhd.model, dpi=60)
                         plt.show()
-                    else:
-                        print(f"Корреляция на 'лучшей' эпохе  ({epoch_best}): {correlation(y_test_samples[:, 0], pred_best[:, 0])}")
-                        print(f"Корреляция на последней эпохе ({epoch_last}): {correlation(y_test_samples[:, 0], pred_last[:, 0])}")
+                    elif "corel" in tab_group:
+                        if "-s" in tab_group:
+                            y_ref  = data_provider.y_test
+                            y_best = pred_best_scaled
+                            y_last = pred_last_scaled
+                        else:
+                            y_ref  = y_test_samples
+                            y_best = pred_best
+                            y_last = pred_last
+
+                        print(f"Корреляция на 'лучшей' эпохе  ({epoch_best}): {correlation(y_ref[:, 0], y_best[:, 0])}")
+                        print(f"Корреляция на последней эпохе ({epoch_last}): {correlation(y_ref[:, 0], y_last[:, 0])}")
                         print("")
 
                         # Подготовка данных для анализа корреляции
                         cg_auto = correlation_graph(
-                            y_test_samples[:, 0],
-                            y_test_samples[:, 0],
+                            y_ref[:, 0],
+                            y_ref[:, 0],
                             0,
-                            y_test_samples.shape[0],
+                            y_ref.shape[0],
                             cg_range
                         )
 
                         cg_best = correlation_graph(
-                            y_test_samples[:, 0],
-                            pred_best     [:, 0],
+                            y_ref [:, 0],
+                            y_best[:, 0],
                             0,
-                            y_test_samples.shape[0],
+                            y_ref.shape[0],
                             cg_range
                         )
                         cg_best_peak = np.argmax(cg_best)+cg_range[0]
 
                         cg_last = correlation_graph(
-                            y_test_samples[:, 0],
-                            pred_last     [:, 0],
+                            y_ref [:, 0],
+                            y_last[:, 0],
                             0,
-                            y_test_samples.shape[0],
+                            y_ref.shape[0],
                             cg_range
                         )
                         cg_last_peak = np.argmax(cg_last)+cg_range[0]
@@ -613,9 +560,9 @@ for model_name in models:
 
                         # Графики значений исходных / предсказанных
                         graph_data = [
-                                y_test_samples[:, 0],
-                                pred_best     [:, 0],
-                                pred_last     [:, 0],
+                                y_ref [:, 0],
+                                y_best[:, 0],
+                                y_last[:, 0],
                         ]
                         graph_def = GraphDef(
                             idx_label = {
