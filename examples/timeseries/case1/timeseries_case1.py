@@ -281,10 +281,10 @@ def get_tab(tab_id, model_name, hp_name, hp):
     if hp['data_vars']['predict_range'][1]-hp['data_vars']['predict_range'][0] == 1:
         return tab_id, f"{model_name[:3]}-{hp['data_vars']['predict_range'][0]:02}"
     else:
-        return tab_id, f"{model_name[:3]}-{hp['data_vars']['predict_range'][0]:02}:{hp['data_vars']['predict_range'][1]:02}"
+        return tab_id, f"{model_name[:3]}-{hp['data_vars']['predict_range'][0]:02}:{hp['data_vars']['predict_range'][1]-1:02}"
 
 def get_tab_r(tab_id, model_name, hp_name, hp):
-    return   f"{tab_id}--{model_name[:3]}-{hp['data_vars']['predict_range'][0]:02}:{hp['data_vars']['predict_range'][1]:02}", None
+    return   f"{tab_id[:3]}--{model_name[:3]}-{hp['data_vars']['predict_range'][0]:02}:{hp['data_vars']['predict_range'][1]-1:02}", None
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
