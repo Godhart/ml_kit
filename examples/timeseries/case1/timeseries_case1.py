@@ -222,7 +222,8 @@ models = to_dict(
 # Гиперпараметры
 
 hp_defaults = to_dict(
-        tabs=['learn', 'corel', 'corel-s'],
+        tabs=['learn', 'corel', ],
+        # 'corel-s', # NOTE: use 'corel-s' to compare scaled/unscaled data if something goes wrong
 )
 
 data_common_vars=to_dict(
@@ -256,10 +257,20 @@ hp_template = to_dict(
 
 hyper_params_sets = {}
 
-for i in range(1,11,9):
+if True:
+    # Варианты с предсказанием одного шага
+    for i in range(1,11,9):
+        hp =copy.deepcopy(hp_template)
+        hp['data_vars']['predict_range'] = (i, i+1)
+        hyper_params_sets[f"n{i}"] = hp
+
+if True:
+    # Варианты с предсказанием серии шагов
     hp =copy.deepcopy(hp_template)
-    hp['data_vars']['predict_range'] = (i, i+1)
-    hyper_params_sets[f"n{i}"] = hp
+    hp['data_vars']['predict_range'] = (1, 11)
+    hp['tabs'] = ['learn', 'c-range']
+    hp['metrics'] = [S_MAE]
+    hyper_params_sets[f"n-1:10"] = hp
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
@@ -268,6 +279,9 @@ for i in range(1,11,9):
 
 def get_tab(tab_id, model_name, hp_name, hp):
   return tab_id, f"{model_name}-{hp_name}"
+
+def get_tab_r(tab_id, model_name, hp_name, hp):
+  return f"{tab_id}-{model_name}-{hp_name}", None
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
@@ -278,14 +292,26 @@ tabs_dict = {}
 for model_name in models:
     for hp_name, hp in hyper_params_sets.items():
         for tab_id in hp['tabs']:
-            tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
-            if tab_group not in tabs_dict:
-                tabs_dict[tab_group] = {}
-            widget = tabs_dict[tab_group][tab_i] = widgets.Output()
-            with widget:
-                # По умолчанию заполнить текст вкладок информацией о параметрах модели
-                clear_output()
-                print(f"{model_name}--{hp_name}")
+            if "-range" not in tab_id:
+                tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
+                if tab_group not in tabs_dict:
+                    tabs_dict[tab_group] = {}
+                widget = tabs_dict[tab_group][tab_i] = widgets.Output()
+                with widget:
+                    # По умолчанию заполнить текст вкладок информацией о параметрах модели
+                    clear_output()
+                    print(f"{model_name}--{hp_name}")
+            else:
+                tab_group, _ = get_tab_r(tab_id, model_name, hp_name, hp)
+                if tab_group not in tabs_dict:
+                    tabs_dict[tab_group] = {}
+                for i in range(*hp['data_vars']['predict_range']):
+                    tab_i = str(i)
+                    widget = tabs_dict[tab_group][tab_i] = widgets.Output()
+                    with widget:
+                        # По умолчанию заполнить текст вкладок информацией о параметрах модели
+                        clear_output()
+                        print(f"{model_name}--{hp_name}")
 
 tabs_objs = {k: widgets.Tab() for k in tabs_dict}
 for k, v in tabs_dict.items():
@@ -348,10 +374,20 @@ def prepare_data(
     y_data_scaled = y_scaler.transform(y_data)
 
     # Создание массива выходных данных
-    y_samples_scaled = [
-        y_data_scaled[i + split.y_start_offset : i + split.y_end_offset+1, : ]
-        for i in range(y_data_scaled.shape[0]-data_crop-1)
-    ]
+    y_idxs = list(range(*y_predict_range))
+    if len(y_idxs) < 1:
+        raise ValueError(f"Predict range is empty!")
+    elif len(y_idxs) == 1:
+        y_samples_scaled = [
+            y_data_scaled[i + split.y_start_offset, : ]
+            for i in range(y_data_scaled.shape[0]-data_crop-1)
+        ]
+    else:
+        y_samples_scaled = []
+        for i in range(y_data_scaled.shape[0]-data_crop-1):
+            x = y_data_scaled[i + split.y_start_offset : i + split.y_end_offset+1, : ]
+            # TODO: take into account y_idxs
+            y_samples_scaled.append(x)
     # Сдвиг на 1 элемент чтобы значение с индексом N следовало
     # сразу после последнего предиката из соответствующей входной последовательности (с индексом N-1)
     y_samples_scaled.insert(0, y_samples_scaled[0])
@@ -386,6 +422,111 @@ def prepare_data(
     }
     return data_provider, x_scaler, y_scaler, input_shape, output_data
 
+# -------------------------------------------------------------------------------------------------------------------- #
+
+###
+# Функция вывода графиков и характеристик работы модели на тестовой выборке
+
+def print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars):
+    print(f"Корреляция на 'лучшей' эпохе  ({epoch_best}): {correlation(y_ref[:, 0], y_best[:, 0])}")
+    print(f"Корреляция на последней эпохе ({epoch_last}): {correlation(y_ref[:, 0], y_last[:, 0])}")
+    print("")
+
+    # Подготовка данных для анализа корреляции
+    cg_auto = correlation_graph(
+        y_ref[:, 0],
+        y_ref[:, 0],
+        0,
+        y_ref.shape[0],
+        cg_range
+    )
+
+    cg_best = correlation_graph(
+        y_ref [:, 0],
+        y_best[:, 0],
+        0,
+        y_ref.shape[0],
+        cg_range
+    )
+    cg_best_peak = np.argmax(cg_best)+cg_range[0]
+
+    cg_last = correlation_graph(
+        y_ref [:, 0],
+        y_last[:, 0],
+        0,
+        y_ref.shape[0],
+        cg_range
+    )
+    cg_last_peak = np.argmax(cg_last)+cg_range[0]
+
+
+    print(f"Пик корреляции на 'лучшей' эпохе  ({epoch_best}): {cg_best_peak}")
+    print(f"Пик корреляции на последней эпохе ({epoch_last}): {cg_last_peak}")
+    print("")
+
+    # Графики значений исходных / предсказанных
+    graph_data = [
+            y_ref [:, 0],
+            y_best[:, 0],
+            y_last[:, 0],
+    ]
+    graph_def = GraphDef(
+        idx_label = {
+            0 : "Исходные данные",
+            1 : f"Предсказание на 'лучшей' эпохе (({epoch_best}))'",
+            2 : f"Предсказание на последней эпохе (({epoch_last}))"
+        },
+        title   = 'Сравнение предсказаний с реальными данными',
+        y_label = data_vars['predict_col'],
+        x_label = None,
+        plot_f  = plot_sequences,
+    )
+    if epoch_last == epoch_best:
+        del graph_def.idx_label[2]
+    fig, subplots = plt.subplots(1, 1, figsize=(10,6))
+    plot_graph(
+        subplots,
+        graph_data,
+        graph_def,
+        *display_range,
+    )
+    # Регулировка пределов оси x
+    plt.xlim(0, display_range[1]-display_range[0])
+    # Фиксация графика
+    plt.show()
+
+
+    # Графики корреляции (отрисовка)
+    cg_x = list(range(cg_range[0], cg_range[1]+1))
+    graph_data = [
+            [cg_x, cg_auto],
+            [cg_x, cg_best],
+            [cg_x, cg_last],
+    ]
+    graph_def = GraphDef(
+        idx_label = {
+            0 : "Автокорреляция исходных данных",
+            1 : f"Корреляция на 'лучшей' эпохе ({epoch_best})",
+            2 : f"Корреляция на последней эпохе ({epoch_last})"
+        },
+        title   = 'Корреляция',
+        y_label = data_vars['predict_col'],
+        x_label = None,
+        plot_f  = plot_xy,
+    )
+    if epoch_last == epoch_best:
+        del graph_def.idx_label[2]
+    fig, subplots = plt.subplots(1, 1, figsize=(10,6))
+    plot_graph(
+        subplots,
+        graph_data,
+        graph_def,
+        *display_range,
+    )
+    # # Регулировка пределов оси x
+    plt.xlim(cg_range[0], cg_range[1]+1)
+    # Фиксация графика
+    plt.show()
 
 # -------------------------------------------------------------------------------------------------------------------- #
 
@@ -430,7 +571,7 @@ for model_name in models:
 
             model_vars = copy.deepcopy(hp['model_vars'])
             model_vars['branch_general_input_shape'] = input_shape
-            model_vars['output_neurons'] = data_vars['predict_range'][1] - data_vars['predict_range'][0]
+            model_vars['output_neurons'] = data_vars['predict_range'][1] - data_vars['predict_range'][0]    # TODO: there could be 3rd arg in range, take it into account
             if isinstance(y_scaler, MinMaxScaler):
                 model_vars['auto_output_activation'] = 'relu'
                 # TODO: also it could be sigmoid
@@ -445,7 +586,7 @@ for model_name in models:
                 model_class     = model_data['model_class'],
                 optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
                 loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
-                metrics         = model_data.get('metrics',   ENV[ENV__TRAIN__DEFAULT_METRICS]),
+                metrics         = model_data.get('metrics',   hp.get('metrics', ENV[ENV__TRAIN__DEFAULT_METRICS])),
                 model_template  = model_data['template'],
                 model_variables = model_vars,
                 batch_size      = model_data.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
@@ -495,134 +636,51 @@ for model_name in models:
 
             # Вывод результатов во вкладки
             display_range = (0, 501)    # Диапазон по X для графиков значений
-            cg_range = (-30, 30)        # Диапазон для графиков корреляции
+            cg_range = (-10, 110)       # Диапазон для графиков корреляции
             assert y_test_samples.shape == pred_best.shape, "Something went wrong!"
             assert y_test_samples.shape == pred_last.shape, "Something went wrong!"
 
             for tab_id in hp['tabs']:
-                tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
-                with tabs_dict[tab_group][tab_i]:
-                    clear_output()
-                    print(f"Модель         : {hp['model']}")
-                    print(f"Гиперпараметры : {hp_name}")
-                    print("")
-                    if "learn" in tab_group:
-                        mhd.context.report_to_screen()
-                        mhd.model.summary()
-
-                        utils.plot_model(mhd.model, dpi=60)
-                        plt.show()
-                    elif "corel" in tab_group:
-                        if "-s" in tab_group:
-                            y_ref  = data_provider.y_test
-                            y_best = pred_best_scaled
-                            y_last = pred_last_scaled
-                        else:
-                            y_ref  = y_test_samples
-                            y_best = pred_best
-                            y_last = pred_last
-
-                        print(f"Корреляция на 'лучшей' эпохе  ({epoch_best}): {correlation(y_ref[:, 0], y_best[:, 0])}")
-                        print(f"Корреляция на последней эпохе ({epoch_last}): {correlation(y_ref[:, 0], y_last[:, 0])}")
+                if "-range" not in tab_id:
+                    # Вывод основной информации
+                    # Вывод графиков предсказаний и корреляции если предсказания были только на один шаг
+                    tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
+                    with tabs_dict[tab_group][tab_i]:
+                        clear_output()
+                        print(f"Модель         : {hp['model']}")
+                        print(f"Гиперпараметры : {hp_name}")
                         print("")
+                        if "learn" in tab_group:
+                            mhd.context.report_to_screen()
+                            mhd.model.summary()
 
-                        # Подготовка данных для анализа корреляции
-                        cg_auto = correlation_graph(
-                            y_ref[:, 0],
-                            y_ref[:, 0],
-                            0,
-                            y_ref.shape[0],
-                            cg_range
-                        )
-
-                        cg_best = correlation_graph(
-                            y_ref [:, 0],
-                            y_best[:, 0],
-                            0,
-                            y_ref.shape[0],
-                            cg_range
-                        )
-                        cg_best_peak = np.argmax(cg_best)+cg_range[0]
-
-                        cg_last = correlation_graph(
-                            y_ref [:, 0],
-                            y_last[:, 0],
-                            0,
-                            y_ref.shape[0],
-                            cg_range
-                        )
-                        cg_last_peak = np.argmax(cg_last)+cg_range[0]
-
-
-                        print(f"Пик корреляции на 'лучшей' эпохе  ({epoch_best}): {cg_best_peak}")
-                        print(f"Пик корреляции на последней эпохе ({epoch_last}): {cg_last_peak}")
-                        print("")
-
-                        # Графики значений исходных / предсказанных
-                        graph_data = [
-                                y_ref [:, 0],
-                                y_best[:, 0],
-                                y_last[:, 0],
-                        ]
-                        graph_def = GraphDef(
-                            idx_label = {
-                                0 : "Исходные данные",
-                                1 : f"Предсказание на 'лучшей' эпохе (({epoch_best}))'",
-                                2 : f"Предсказание на последней эпохе (({epoch_last}))"
-                            },
-                            title   = 'Сравнение предсказаний с реальными данными',
-                            y_label = data_vars['predict_col'],
-                            x_label = None,
-                            plot_f  = plot_sequences,
-                        )
-                        if epoch_last == epoch_best:
-                            del graph_def.idx_label[2]
-                        fig, subplots = plt.subplots(1, 1, figsize=(10,6))
-                        plot_graph(
-                            subplots,
-                            graph_data,
-                            graph_def,
-                            *display_range,
-                        )
-                        # Регулировка пределов оси x
-                        plt.xlim(0, display_range[1]-display_range[0])
-                        # Фиксация графика
-                        plt.show()
-
-
-                        # Графики корреляции (отрисовка)
-                        cg_x = list(range(cg_range[0], cg_range[1]+1))
-                        graph_data = [
-                                [cg_x, cg_auto],
-                                [cg_x, cg_best],
-                                [cg_x, cg_last],
-                        ]
-                        graph_def = GraphDef(
-                            idx_label = {
-                                0 : "Автокорреляция исходных данных",
-                                1 : f"Корреляция на 'лучшей' эпохе ({epoch_best})",
-                                2 : f"Корреляция на последней эпохе ({epoch_last})"
-                            },
-                            title   = 'Корреляция',
-                            y_label = data_vars['predict_col'],
-                            x_label = None,
-                            plot_f  = plot_xy,
-                        )
-                        if epoch_last == epoch_best:
-                            del graph_def.idx_label[2]
-                        fig, subplots = plt.subplots(1, 1, figsize=(10,6))
-                        plot_graph(
-                            subplots,
-                            graph_data,
-                            graph_def,
-                            *display_range,
-                        )
-                        # # Регулировка пределов оси x
-                        plt.xlim(cg_range[0], cg_range[1]+1)
-                        # Фиксация графика
-                        plt.show()
+                            utils.plot_model(mhd.model, dpi=60)
+                            plt.show()
+                        elif "corel" in tab_group:
+                            if "-s" in tab_group:
+                                y_ref  = data_provider.y_test
+                                y_best = pred_best_scaled
+                                y_last = pred_last_scaled
+                            else:
+                                y_ref  = y_test_samples
+                                y_best = pred_best
+                                y_last = pred_last
+                            print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars)
+                else:
+                    # Вывод графиков предсказаний и корреляции если предсказания были на несолько шагов
+                    tab_group, _ = get_tab_r(tab_id, model_name, hp_name, hp)
+                    j = -1
+                    for i in range(*hp['data_vars']['predict_range']):
+                        tab_i = str(i)
+                        j += 1
+                        with tabs_dict[tab_group][tab_i]:
+                            y_ref  = y_test_samples [:,j:j+1]
+                            y_best = pred_best      [:,j:j+1]
+                            y_last = pred_last      [:,j:j+1]
+                            print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars)
 
                 with dummy_output:
+                    plt.show()
                     clear_output()
 
             mhd.context.report_history = None
