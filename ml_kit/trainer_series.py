@@ -1,5 +1,6 @@
 import numpy as np
 import keras.backend as K
+from scipy import signal as S
 
 import sys
 from pathlib import Path
@@ -22,14 +23,30 @@ if STANDALONE:
 ENV__CORRELATION_PEAKSEARCH_RANGE = "ENV__CORRELATION_PEAKSEARCH_RANGE"
 ENV[ENV__CORRELATION_PEAKSEARCH_RANGE] = (-70, 70)
 
+S_COREL_METHOD__AUTO = "auto"
+S_COREL_METHOD__NP_CORRCOEF = "np.corrcoef"
+S_COREL_METHOD__NP = "np"
+S_COREL_METHOD__SCIPY_CORRELATE = "scipy.correlate"
 
-def correlation(a, b, method=1):
+S_COREL_METHODS = [
+    S_COREL_METHOD__AUTO,
+    S_COREL_METHOD__NP_CORRCOEF,
+    S_COREL_METHOD__NP,
+    S_COREL_METHOD__SCIPY_CORRELATE,
+]
+
+def correlation(a, b, method=S_COREL_METHOD__AUTO, method_kwargs=None):
     """
     Функция расчета корреляционного коэффициента Пирсона для двух рядов
     """
-    if method==1:
+    if method not in S_COREL_METHODS:
+        raise ValueError(f"Unsupported method '{method}'")
+
+    if method==S_COREL_METHOD__AUTO:
+        method = S_COREL_METHOD__NP_CORRCOEF
+    if method==S_COREL_METHOD__NP_CORRCOEF:
         return np.corrcoef(a, b)[0, 1]
-    elif method==2:
+    elif method==S_COREL_METHOD__NP:
         a = np.array(a)
         b = np.array(b)
         a_mean = np.mean(a)
@@ -40,39 +57,50 @@ def correlation(a, b, method=1):
         corr = (ab_mean - a_mean*b_mean)/(a_std*b_std)
         return corr
     else:
-        raise ValueError(f"Unsupported method '{method}'")
+        raise ValueError(f"Unsupported method '{method}' for correlation!")
 
 
-def correlation_graph(a, b, data_start, data_end, graph_range, method=1):
+def correlation_graph(a, b, data_start, data_end, graph_range, method=S_COREL_METHOD__AUTO, method_kwargs=None):
     if isinstance(graph_range, int):
         graph_range = (0, graph_range)
-    result = []
-    negative_range = (graph_range[0], -1)
-    positive_range = (0, graph_range[1])
-    for start, end in (negative_range, positive_range,):
-        if start < 0:
-            aa = b
-            bb = a
-            mult = -1
-        else:
-            aa = a
-            bb = b
-            mult = 1
-        for i in range(start, end+1):
-            result.append(
-                correlation(
-                    aa[data_start:data_end - mult*i],
-                    bb[data_start + mult*i:data_end],
-                    method=method
+    if method != S_COREL_METHOD__SCIPY_CORRELATE:
+        result = []
+        negative_range = (graph_range[0], -1)
+        positive_range = (0, graph_range[1])
+        for start, end in (negative_range, positive_range,):
+            if start < 0:
+                aa = b
+                bb = a
+                mult = -1
+            else:
+                aa = a
+                bb = b
+                mult = 1
+            for i in range(start, end+1):
+                result.append(
+                    correlation(
+                        aa[data_start:data_end - mult*i],
+                        bb[data_start + mult*i:data_end],
+                        method=method,
+                        method_kwargs=method_kwargs,
+                    )
                 )
-            )
+        return result
+    else:
+        corr = S.correlate(a[data_start:data_end], b[data_start:data_end], mode='valid')
+        lags = S.correlation_lags(data_start-data_end, data_start-data_end)
+        if graph_range[0] < lags.min:
+            raise ValueError("Not enough data!")
+        if graph_range[1]-1 > lags.max:
+            raise ValueError("Not enough data!")
+        start_index = graph_range[0] - lags.min
+        end_index   = graph_range[1] - lags.min
+        return corr[start_index:end_index]
 
-    return result
 
-
-def correlation_peak(a, b, method=1):
+def correlation_peak(a, b, method=S_COREL_METHOD__AUTO, method_kwargs=None):
     peak_search_range = ENV[ENV__CORRELATION_PEAKSEARCH_RANGE]
-    cv = correlation_graph(a, b, 0, -1, peak_search_range, method=method)
+    cv = correlation_graph(a, b, 0, -1, peak_search_range, method=method, method_kwargs=method_kwargs)
     peak = np.argmax(cv) + peak_search_range[0]
     return peak
 
