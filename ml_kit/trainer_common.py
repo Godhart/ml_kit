@@ -615,10 +615,12 @@ class ModelContext:
             s_col = 0
             s_row = 0
             for metric in print_metrics:
-                if cols > 1:
+                if cols > 1 and rows > 1:
                     subplot = subplots[s_row, s_col]
-                else:
+                elif rows > 1:
                     subplot = subplots[s_row]
+                else:
+                    subplot = subplots[s_col]
                 s_col += 1
                 if s_col >= cols:
                     s_col = 0
