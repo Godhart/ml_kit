@@ -281,7 +281,7 @@ def get_tab(tab_id, model_name, hp_name, hp):
   return tab_id, f"{model_name}-{hp_name}"
 
 def get_tab_r(tab_id, model_name, hp_name, hp):
-  return f"{tab_id}-{model_name}-{hp_name}", None
+  return f"{tab_id}--{model_name}--{hp_name}", None
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
