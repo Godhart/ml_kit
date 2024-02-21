@@ -87,14 +87,16 @@ def correlation_graph(a, b, data_start, data_end, graph_range, method=S_COREL_ME
                 )
         return result
     else:
-        corr = S.correlate(a[data_start:data_end], b[data_start:data_end], mode='valid')
-        lags = S.correlation_lags(data_start-data_end, data_start-data_end)
-        if graph_range[0] < lags.min:
+        corr = S.correlate(a[data_start:data_end], b[data_start:data_end], mode='same')
+        lags = S.correlation_lags(data_end-data_start, data_end-data_start, mode='same')
+        lags_min = lags[0]
+        lags_max = lags[-1]
+        if graph_range[0] < lags_min:
             raise ValueError("Not enough data!")
-        if graph_range[1]-1 > lags.max:
+        if graph_range[1]-1 > lags_max:
             raise ValueError("Not enough data!")
-        start_index = graph_range[0] - lags.min
-        end_index   = graph_range[1] - lags.min
+        start_index = graph_range[0] - lags_min
+        end_index   = graph_range[1] - lags_min
         return corr[start_index:end_index]
 
 
