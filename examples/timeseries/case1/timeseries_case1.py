@@ -152,9 +152,9 @@ ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-4
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = S_MSE
 ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_CORRELATION, S_CORRELATION_PEAK, S_MAE]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 128
-ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 10 # TODO: 50
+ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 20 # TODO: 50
 ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_CORRELATION: 1, S_CORRELATION_PEAK: 0, S_MAE: 0}
-ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
+ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 5
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
 # -------------------------------------------------------------------------------------------------------------------- #
@@ -278,10 +278,10 @@ if True:
 # Создать вкладки для вывода результатов
 
 def get_tab(tab_id, model_name, hp_name, hp):
-  return tab_id, f"{model_name}-{hp_name}"
+  return tab_id, f"{model_name[:3]}-{hp['data_vars']['predict_range'][0]:02}"
 
 def get_tab_r(tab_id, model_name, hp_name, hp):
-  return f"{tab_id}--{model_name}--{hp_name}", None
+  return f"{tab_id}--{hp['data_vars']['predict_range'][0]:02}:{hp['data_vars']['predict_range'][1]:02}", None
 
 from IPython.display import clear_output, display
 import ipywidgets as widgets
@@ -306,7 +306,7 @@ for model_name in models:
                 if tab_group not in tabs_dict:
                     tabs_dict[tab_group] = {}
                 for i in range(*hp['data_vars']['predict_range']):
-                    tab_i = str(i)
+                    tab_i = f"{i:02}"
                     widget = tabs_dict[tab_group][tab_i] = widgets.Output()
                     with widget:
                         # По умолчанию заполнить текст вкладок информацией о параметрах модели
@@ -427,7 +427,10 @@ def prepare_data(
 ###
 # Функция вывода графиков и характеристик работы модели на тестовой выборке
 
-def print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars):
+def print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars, custom_header=None):
+    if custom_header is not None:
+        for line in custom_header:
+            print(line)
     print(f"Корреляция на 'лучшей' эпохе  ({epoch_best}): {correlation(y_ref[:, 0], y_best[:, 0])}")
     print(f"Корреляция на последней эпохе ({epoch_last}): {correlation(y_ref[:, 0], y_last[:, 0])}")
     print("")
@@ -483,7 +486,7 @@ def print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, displ
     )
     if epoch_last == epoch_best:
         del graph_def.idx_label[2]
-    fig, subplots = plt.subplots(1, 1, figsize=(10,6))
+    fig, subplots = plt.subplots(1, 1, figsize=(15,5))
     plot_graph(
         subplots,
         graph_data,
@@ -516,7 +519,7 @@ def print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, displ
     )
     if epoch_last == epoch_best:
         del graph_def.idx_label[2]
-    fig, subplots = plt.subplots(1, 1, figsize=(10,6))
+    fig, subplots = plt.subplots(1, 1, figsize=(15,3))
     plot_graph(
         subplots,
         graph_data,
@@ -531,7 +534,7 @@ def print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, displ
 # -------------------------------------------------------------------------------------------------------------------- #
 
 ###
-# Функция вывода кореляции для серии предсказаний
+# Функция вывода корреляции для серии предсказаний
 
 def print_series_result(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars):
 
@@ -571,7 +574,7 @@ def print_series_result(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range,
 
     # Графики корреляции (отрисовка)
     cg_x = list(range(cg_range[0], cg_range[1]+1))
-    # TODO: split cg_auto/cg_best/cg_last per dimmension
+    # TODO: split cg_auto/cg_best/cg_last per dimension
     graph_data = [
             [cg_x, cg_auto],
             [cg_x, cg_best],
@@ -748,17 +751,21 @@ for model_name in models:
                             else:
                                 print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars)
                 else:
-                    # Вывод графиков предсказаний и корреляции если предсказания были на несолько шагов
+                    # Вывод графиков предсказаний и корреляции если предсказания были на несколько шагов
                     tab_group, _ = get_tab_r(tab_id, model_name, hp_name, hp)
                     j = -1
                     for i in range(*hp['data_vars']['predict_range']):
-                        tab_i = str(i)
+                        tab_i = f"{i:02}"
                         j += 1
+                        custom_header=[
+                            f"Предсказание на {j} шаг вперёд",
+                            ""
+                        ]
                         with tabs_dict[tab_group][tab_i]:
                             y_ref  = y_test_samples [:,j:j+1]
                             y_best = pred_best      [:,j:j+1]
                             y_last = pred_last      [:,j:j+1]
-                            print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars)
+                            print_results(epoch_best, epoch_last, y_ref, y_best, y_last, cg_range, display_range, data_vars, custom_header)
 
                 with dummy_output:
                     plt.show()
