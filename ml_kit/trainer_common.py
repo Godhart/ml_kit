@@ -82,6 +82,7 @@ S_LE = "le"
 METRICS = {
     S_ACCURACY  : {S_COMPARE: S_GE},
     S_MAE       : {S_COMPARE: S_LE},
+    S_MSE       : {S_COMPARE: S_LE},
 }
 
 # Metrics translation / full sentence
