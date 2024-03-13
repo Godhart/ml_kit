@@ -825,6 +825,7 @@ class ModelHandler():
         model_variables : dict | None = None,
         batch_size      : int  | None = 10,
         data_provider   : TrainDataProvider = None,
+        load_weights_only : bool = False
     ):
         if metrics is None:
             metrics = [S_ACCURACY]
@@ -840,7 +841,9 @@ class ModelHandler():
         self.model_variables = model_variables
         self.batch_size      = batch_size
         self._model          = None
+        self._named_layers   = {}
         self.data_provider   = data_provider
+        self.load_weights_only = load_weights_only
 
     @property
     def context(self):
@@ -894,6 +897,10 @@ class ModelHandler():
         return self._model
 
     @property
+    def named_layers(self):
+        return {**self._named_layers}
+
+    @property
     def inputs_order(self):
         return self._context.inputs_order
 
@@ -941,6 +948,7 @@ class ModelHandler():
             return result
         self._model         = mc[S_MODEL]
         self._context.inputs_order  = mc[S_INPUTS]
+        self._named_layers  = mc[S_NAMED_LAYERS]    # NOTE: named layers aren't restored on model load, use load_weights if named layers are used!
         if isinstance(self.context.optimizer, (list, tuple)):
             optimizer = self.context.optimizer[0](*self.context.optimizer[1], **self.context.optimizer[2])
         elif callable(self.context.optimizer):
@@ -976,15 +984,26 @@ class ModelHandler():
         with open(path / "context.pickle", "wb") as f:
             pickle.dump(self._context, f)
         self._model.save(path / "model.keras")
+        self._model.save_weights(path / "model.ckpt")
         with open(path / "model.txt", "w") as f:
             self._model.summary(print_fn=lambda x: f.write(x+"\n"))
         self._context.summary_to_disk(path)
 
-    def load(self, path, dont_load_model=False):
+    def load(self, path, dont_load_model=None, load_weights=None):
+        if dont_load_model is None:
+            if self.load_weights_only:
+                dont_load_model = True
+                load_weights = True
+            else:
+                dont_load_model = False
+                load_weights = False
+        if dont_load_model is True and load_weights is True:
+            if self._model is None:
+                self.create()
         print(f"Loading model state from '{path}'")
         with open(path / "context.pickle", "rb") as f:
             self._context = pickle.load(f)
-        if not dont_load_model:
+        if dont_load_model is False:
             custom_objects = {}
             for metric in self.metrics:
                 if S_FUNCTION in METRICS[metric]:
@@ -993,6 +1012,11 @@ class ModelHandler():
                 path / "model.keras",
                 custom_objects=custom_objects,
             )
+        elif load_weights is True:
+            self.load_weights(path)
+
+    def load_weights(self, path):
+        self._model.load_weights(path / "model.ckpt")
 
     def update_data(self, force=False):
         if self._context.test_pred is None or force:
@@ -1159,7 +1183,7 @@ class TrainHandler:
             return True
         return False
 
-    def load(self, path=S_REGULAR, dont_load_model=False):
+    def load(self, path=S_REGULAR, dont_load_model=None):
         if path == S_REGULAR:
             load_path = self._last_path
             back_path = self._back_path
