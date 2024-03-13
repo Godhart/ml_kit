@@ -38,7 +38,7 @@ S_PARENTS = 'parents'
 S_CHILDREN = 'children'
 S_IPARENTS = 'iparents'
 S_ICHILDREN = 'ichildren'
-
+S_NAMED_LAYERS = 'named_layers'
 
 class timex:
     """
@@ -228,7 +228,7 @@ def subst_vars(value, variables, recurse=False, var_sign="$", raise_error_when_n
 def layer_create(layer_template_data, **variables):
     layer_kind, args, kwargs = layer_template_data
     args = [*args]
-    kwargs = {**kwargs}
+    kwargs = {k:v for k,v in kwargs.items() if isinstance(k, str) and k[:1] != "_"}
     args = subst_vars(args, variables, recurse=True)
     kwargs = subst_vars(kwargs, variables, recurse=True)
     layer_kind_type = str(type(layer_kind))
@@ -246,13 +246,16 @@ def layer_create(layer_template_data, **variables):
 
 def _create_layers_chain(parent, *layers, **variables):
     layers_chain = []
+    named = {}
     for layer in layers:
         if parent is None:
             parent = layer_create(layer, **variables)
         else:
             parent = layer_create(layer, **variables)(parent)
+        if '_name_' in layer[2]:
+            named[layer[2]['_name_']] = parent
         layers_chain.append(parent)
-    return layers_chain
+    return layers_chain, named
 
 def _lookup_vars(value, result:list[str], lookup_vars:dict):
     if isinstance(value, (list, tuple)):
@@ -287,6 +290,7 @@ def model_create(model_class, templates, **variables):
     inputs = None
     outputs = None
     model = None
+    named_layers = {}
 
     if isinstance(templates, (list, tuple)):
         if len(templates) < 2:
@@ -294,9 +298,12 @@ def model_create(model_class, templates, **variables):
         if hasattr(model_class, 'add'): # NOTE: this is for Sequential model
             model = model_class()
             for layer in templates:
-                model.add(layer_create(layer, **variables))
+                layer_instance = layer_create(layer, **variables)
+                model.add(layer_instance)
+                if '_name_' in layer[2]:
+                    named_layers[layer[2]['_name_']] = layer_instance
         else:
-            layers_chain = _create_layers_chain(None, *templates, **variables)
+            layers_chain, named_layers = _create_layers_chain(None, *templates, **variables)
             model = model_class([layers_chain[0]], layers_chain[-1])
 
     elif isinstance(templates, dict):
@@ -440,10 +447,13 @@ def model_create(model_class, templates, **variables):
                     parents = None
                 else:
                     parents = branches[v[S_PARENTS][0]][S_CHAIN][-1]
-                branches[k][S_CHAIN] = _create_layers_chain(
+                branches[k][S_CHAIN], named = _create_layers_chain(
                     parents,
                     *v[S_LAYERS],
                     **branch_vars)
+                for nk, nv in named.items():
+                    named_layers[k+"/"+nk] = nv
+
                 created_branches[k] = branches[k][S_CHAIN][-1]
 
             prev_incomplete = incomplete_branches
@@ -456,7 +466,7 @@ def model_create(model_class, templates, **variables):
                     )
         model = model_class([branches[k][S_CHAIN][0] for k in inputs], branches[outputs[0]][S_CHAIN][-1])
 
-    return {S_MODEL: model, S_INPUTS: inputs}
+    return {S_MODEL: model, S_INPUTS: inputs, S_NAMED_LAYERS: named_layers}
 
 
 if STANDALONE:
