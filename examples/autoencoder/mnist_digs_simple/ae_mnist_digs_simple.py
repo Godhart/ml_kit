@@ -241,11 +241,31 @@ def mult(*args):
 input_shape = x_train.shape[1:]
 
 model_items = to_dict(
-    latent = [
+    latent_cnn = [
                     layer_template(Flatten, ),
                     layer_template(Dense,   2,  activation='relu', _name_='latent'),
                     layer_template(Dense,   "$latent_expand_size_flat", activation='$latent_out_activation'),
                     layer_template(Reshape, "$latent_expand_size"),
+    ],
+    latent_dns = [
+                    layer_template(Dense,   2,  activation='relu', _name_='latent'),
+    ],
+    dns1       = [
+                    layer_template(Dense,   28*28*10,),
+    ],
+    dns2       = [
+                    layer_template(Dense,   14*14,),
+    ],
+    dns3       = [
+                    layer_template(Dense,   7*7,),
+    ],
+    dns_input  = [
+                    layer_template(Input,   input_shape),
+                    layer_template(Flatten, ),
+    ],
+    dns_output = [
+                    layer_template(Dense,   mult(*input_shape), activation='$latent_out_activation'),
+                    layer_template(Reshape, *input_shape),
     ],
     cnn1_encoder = [
                     layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
@@ -288,7 +308,7 @@ latent_expand_size = {
 
 models = to_dict(
 
-    dns1 = to_dict(
+    latent = to_dict(
         model_class = Model,
         vars = to_dict(
             latent = 'native',
@@ -300,7 +320,7 @@ models = to_dict(
                 output = True,
                 layers = [
                     layer_template(Input,   input_shape),
-                    *model_items['latent']
+                    *model_items['latent_cnn']
                 ],
             ),
         ),
@@ -318,7 +338,7 @@ models = to_dict(
                 layers = [
                     layer_template(Input,   input_shape),
                     *model_items['cnn1_encoder'],
-                    *model_items['latent'],
+                    *model_items['latent_cnn'],
                 ]
             ),
             decoder = to_dict(
@@ -345,7 +365,7 @@ models = to_dict(
                     layer_template(Input,   input_shape),
                     *model_items['cnn1_encoder'],
                     *model_items['cnn2_encoder'],
-                    *model_items['latent'],
+                    *model_items['latent_cnn'],
                 ]
             ),
             decoder = to_dict(
@@ -386,6 +406,46 @@ models = to_dict(
     ),
 
 )
+
+dns_models = {}
+
+for dn in range(3):
+    for di in range(3):
+        for dj in range(3):
+            for dk in range(3):
+                idx = tuple([di+1,dj+1,dk+1][:dn+1])
+                dns_models[idx] = None
+
+for k,v in dns_models.items():
+    if v is not None:
+        continue
+    dns_encoder = [model_items[f'dns{ki}'] for ki in k]
+    dns_decoder = [*dns_encoder]
+    dns_decoder.reverse()
+    dns_models[k] = to_dict(
+        model_class = Model,
+        vars = to_dict(
+        ),
+        template = to_dict(
+            encoder = to_dict(
+                input  = True,
+                layers = [
+                    *model_items['dns_input'],
+                    *dns_encoder,
+                    *model_items['latent_dns'],
+                ],
+            ),
+            decoder = to_dict(
+                parents = 'encoder',
+                output  = True,
+                layers = [
+                    *dns_decoder,
+                    *model_items['dns_output']
+                ],
+            ),
+        ),
+    )
+    models['dns'+''.join(str(ki) for ki in k)] = dns_models[k]
 
 # ---------------------------------------------------------------------------- #
 
@@ -499,13 +559,14 @@ for model_name in models:
 
             model_vars = copy.deepcopy(model_data['vars'])
             model_vars = {**model_vars, **copy.deepcopy(hp['model_vars'])}
-            model_vars['latent_expand_size'] = latent_expand_size[model_vars.get('latent', 'native')]
-            def mult(*args):
-                result = 1
-                for v in args:
-                    result *= v
-                return result
-            model_vars['latent_expand_size_flat'] = mult(*model_vars['latent_expand_size'])
+
+            latent_ref = model_vars.get('latent', None)
+            if latent_ref is not None:
+                if isinstance(latent_ref, str):
+                    model_vars['latent_expand_size'] = latent_expand_size[model_vars.get('latent', 'native')]
+                else:
+                    model_vars['latent_expand_size'] = latent_ref
+                model_vars['latent_expand_size_flat'] = mult(*model_vars['latent_expand_size'])
 
             data_provider = TrainDataProvider(
                 x_train = x_train,
