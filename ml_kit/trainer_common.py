@@ -961,8 +961,9 @@ class ModelHandler():
             metrics=get_metrics(self.context.metrics),
         )
 
-    def fit(self, epochs, initial_epoch=None):
-        kwargs = {}
+    def fit(self, epochs, initial_epoch=None, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
         if initial_epoch is not None:
             kwargs['initial_epoch'] = initial_epoch
         self.history = self.model.fit(
@@ -1073,8 +1074,8 @@ class ClassClassifierHandler(ModelHandler):
         else:
             self._context.class_labels = tuple(copy.deepcopy(list(value)))
 
-    def fit(self, epochs, initial_epoch=None):
-        result = super(ClassClassifierHandler, self).fit(epochs, initial_epoch=initial_epoch)
+    def fit(self, epochs, initial_epoch=None, kwargs=None):
+        result = super(ClassClassifierHandler, self).fit(epochs, initial_epoch=initial_epoch, kwargs=kwargs)
         self._context.cm = None
         return result
 
@@ -1106,12 +1107,14 @@ class TrainHandler:
         mhd         : ModelHandler | None,
         mhd_class   = ModelHandler,
         on_model_update = None,
+        fit_callbacks = None,
     ):
         self._data_path = data_path
         self.data_name = data_name
         self.mhd = mhd
         self._mhd_class = mhd_class
         self.on_model_update = on_model_update
+        self.fit_callbacks = fit_callbacks
 
     @property
     def data_path(self):
@@ -1327,7 +1330,10 @@ class TrainHandler:
                     initial_epoch = self.mhd.context.epoch
                 else:
                     initial_epoch = None
-                self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch)
+                fit_kwargs = {}
+                if self.fit_callbacks is not None:
+                    fit_kwargs['callbacks'] = self.fit_callbacks
+                self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch, kwargs=fit_kwargs)
                 # NOTE: fit() would affect .epoch, and other metrics fields
 
                 is_better = False
