@@ -498,11 +498,13 @@ for model_name in models:
 
             data_provider = TrainDataProvider(
                 x_train = x_train,
-                y_train = y_train,
+                y_train = x_train,  # NOTE: x_train is on purpose since it's autoencoder
+
                 x_val   = x_test,
-                y_val   = y_test,
+                y_val   = x_test,   # NOTE: x_test is on purpose since it's autoencoder
+
                 x_test  = x_test,
-                y_test  = y_test,
+                y_test  = x_test,   # NOTE: x_test is on purpose since it's autoencoder
             )
 
             mhd = ModelHandler(
