@@ -215,20 +215,148 @@ from tensorflow.keras.layers import concatenate, Input, Dense, Dropout, BatchNor
 ###
 # Используемые модели
 
+input_shape = x_train.shape[1:]
+
+model_items = to_dict(
+    latent = [
+                    layer_template(Flatten, ),
+                    layer_template(Dense,   2,  activation='relu', _name_='latent'),
+                    layer_template(Dense,   "$latent_expand_size_flat", activation='$latent_out_activation'),
+                    layer_template(Reshape, "$latent_expand_size"),
+    ],
+    cnn1_encoder = [
+                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+                    layer_template(MaxPooling2D, ),
+    ],
+    cnn1_decoder = [
+                    layer_template(Conv2DTranspose, 32, (2, 2), strides=(2, 2), padding='same', activation='relu'),
+                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+    ],
+    cnn2_encoder = [
+                    layer_template(Conv2D,  64, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+                    layer_template(Conv2D,  64, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+                    layer_template(MaxPooling2D, ),
+    ],
+    cnn2_decoder = [
+                    layer_template(Conv2DTranspose, 32, (2, 2), strides=(2, 2), padding='same', activation='relu'),
+                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
+                    layer_template(BatchNormalization, ),
+    ],
+    cnn_output = [
+                    layer_template(Conv2D,  input_shape[-1], (3, 3), activation='sigmoid', padding='same'),
+    ]
+)
+
+latent_expand_size = {
+    "native"    : input_shape,
+    "cnn1"      : (14,14,32),
+    "cnn2"      : (7,7,64),
+}
+
 models = to_dict(
 
     dns1 = to_dict(
         model_class = Model,
+        vars = to_dict(
+            latent = 'native',
+            latent_out_activation = 'sigmoid',
+        ),
         template = to_dict(
-            branch_general = to_dict(
+            encoder = to_dict(
                 input  = True,
                 output = True,
                 layers = [
-                    layer_template(Input,   "$input_shape"),
-                    layer_template(Flatten, ),
-                    layer_template(Dense,   2,  activation='relu', _name_='encoder'),
-                    layer_template(Dense,   "$input_shape_flat", activation='sigmoid'),
-                    layer_template(Reshape, "$input_shape"),
+                    layer_template(Input,   input_shape),
+                    *model_items['latent']
+                ],
+            ),
+        ),
+    ),
+
+    cdns1 = to_dict(
+        model_class = Model,
+        vars = to_dict(
+            latent = 'cnn1',
+            latent_out_activation = 'relu',
+        ),
+        template = to_dict(
+            encoder = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(Input,   input_shape),
+                    *model_items['cnn1_encoder'],
+                    *model_items['latent'],
+                ]
+            ),
+            decoder = to_dict(
+                parents = 'encoder',
+                output = True,
+                layers = [
+                    *model_items['cnn1_decoder'],
+                    *model_items['cnn_output'],
+                ],
+            ),
+        ),
+    ),
+
+    cdns2 = to_dict(
+        model_class = Model,
+        vars = to_dict(
+            latent = 'cnn2',
+            latent_out_activation = 'relu',
+        ),
+        template = to_dict(
+            encoder = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(Input,   input_shape),
+                    *model_items['cnn1_encoder'],
+                    *model_items['cnn2_encoder'],
+                    *model_items['latent'],
+                ]
+            ),
+            decoder = to_dict(
+                parents = 'encoder',
+                output = True,
+                layers = [
+                    *model_items['cnn2_decoder'],
+                    *model_items['cnn1_decoder'],
+                    *model_items['cnn_output'],
+                ],
+            ),
+        ),
+    ),
+
+    cnn2 = to_dict(
+        model_class = Model,
+        vars = to_dict(
+        ),
+        template = to_dict(
+            encoder = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(Input,   input_shape),
+                    *model_items['cnn1_encoder'],
+                    *model_items['cnn2_encoder'],
+                ]
+            ),
+            decoder = to_dict(
+                parents = 'encoder',
+                output = True,
+                layers = [
+                    *model_items['cnn2_decoder'],
+                    *model_items['cnn1_decoder'],
+                    *model_items['cnn_output'],
                 ],
             ),
         ),
@@ -248,21 +376,13 @@ hp_defaults = to_dict(
 )
 
 data_common_vars=to_dict(
-    shuffle         = False,
-    batch_size      = 128,
+    # shuffle         = False,
+    # batch_size      = 128,
 )
-
-def mult(vector):
-    result = 1
-    for v in vector:
-        result *= v
-    return result
 
 hp_template = to_dict(
     **hp_defaults,
     model_vars=to_dict(
-        input_shape         = x_train.shape[1:],
-        input_shape_flat    = mult(x_train.shape[1:]),
         output_drop_rate    = 0.5
     ),
     data_vars={
@@ -354,7 +474,15 @@ for model_name in models:
 
             data_vars = hp['data_vars']
 
-            model_vars = copy.deepcopy(hp['model_vars'])
+            model_vars = copy.deepcopy(model_data['vars'])
+            model_vars = {**model_vars, **copy.deepcopy(hp['model_vars'])}
+            model_vars['latent_expand_size'] = latent_expand_size[model_vars.get('latent', 'native')]
+            def mult(*args):
+                result = 1
+                for v in args:
+                    result *= v
+                return result
+            model_vars['latent_expand_size_flat'] = mult(*model_vars['latent_expand_size'])
 
             data_provider = TrainDataProvider(
                 x_train = x_train,
@@ -373,7 +501,7 @@ for model_name in models:
                 metrics         = model_data.get('metrics',   hp.get('metrics', ENV[ENV__TRAIN__DEFAULT_METRICS])),
                 model_template  = model_data['template'],
                 model_variables = model_vars,
-                batch_size      = model_data.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
+                batch_size      = data_vars.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
                 data_provider   = data_provider,
                 load_weights_only = True,   # NOTE: True since named layers are used
             )
