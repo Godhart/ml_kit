@@ -34,14 +34,16 @@ from tensorflow.keras.optimizers import Adam
 # Коллбэки для выдачи информации в процессе обучения
 from tensorflow.keras.callbacks import LambdaCallback
 
+from pathlib import Path
 # %matplotlib inline
 
 ## Утилиты
 
 EPOCH_CALLBACK_DATA = {
-    'encoder'   : None,
+    'latent'    : None,
     'x_data'    : None,
-    'y_data'    : None
+    'y_data'    : None,
+    'save_path' : None,
 }
 
 # Функция-коллбэк. Отрисовывает объекты в скрытом пространстве
@@ -51,12 +53,18 @@ def ae_on_epoch_end(epoch, logs):
     print(f'*** Epoch: {epoch+1}, loss: {logs["loss"]} ***')
     print('________________________')
 
+    if EPOCH_CALLBACK_DATA['latent'] is None:
+        return
+
+    if EPOCH_CALLBACK_DATA['save_path'] is None:
+        return
+
     # Получение картинки латентного пространства в конце эпохи и запись в файл
     # Задание числа пикселей на дюйм
     plt.figure(dpi=100)
 
     # Предсказание енкодера на тренировочной выборке
-    predict = EPOCH_CALLBACK_DATA['encoder'].predict(EPOCH_CALLBACK_DATA['x_data'])
+    predict = EPOCH_CALLBACK_DATA['latent'].predict(EPOCH_CALLBACK_DATA['x_data'])
 
     # Создание рисунка: множество точек на плоскости 3-х цветов (3-х классов)
     scatter = plt.scatter(predict[:,0,],predict[:,1], c=EPOCH_CALLBACK_DATA['y_data'], alpha=0.6, s=5)
@@ -64,9 +72,13 @@ def ae_on_epoch_end(epoch, logs):
     # Создание легенды
     legend2 = plt.legend(*scatter.legend_elements(), loc='upper right', title='Классы')
 
-    # Сохранение картинки с названием, которого еще нет
-    paths = glob.glob('*.jpg')
-    plt.savefig(f'image_{str(len(paths))}.jpg')
+    # Сохранение картинки с названием соответствующим названию эпохи
+    image_path = Path({EPOCH_CALLBACK_DATA['save_path']})/f"image_{epoch}.jpg"
+    if image_path.exists():
+        image_path.unlink()
+    if not image_path.parent.exists():
+        os.makedirs(image_path.parent, exist_ok=True)
+    plt.savefig(image_path)
 
     # Отображение. Без него рисунок не отрисуется
     plt.show()
@@ -507,7 +519,10 @@ for model_name in models:
             )
 
             def on_model_update(thd):
-                EPOCH_CALLBACK_DATA['encoder'] = mhd.named_layers['branch_general/encoder']
+                # TODO: make two models instead of branched so encoder can be used to visualize latent space
+                return
+                EPOCH_CALLBACK_DATA['latent'] = encoder_model
+                EPOCH_CALLBACK_DATA['save_path'] = Path(thd.data_path) / "latent"
 
             thd = TrainHandler(
                 data_path       = ENV[ENV__MODEL__DATA_ROOT] / model_data.get("data_path", ENV[ENV__TRAIN__DEFAULT_DATA_PATH]),
@@ -515,6 +530,7 @@ for model_name in models:
                 mhd             = mhd,
                 mhd_class       = ModelHandler,
                 on_model_update = on_model_update,
+                fit_callbacks   = [ae_callback],
             )
 
             def display_callback(*args, **kwargs):
