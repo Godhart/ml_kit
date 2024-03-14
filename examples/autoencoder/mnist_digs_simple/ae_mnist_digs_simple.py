@@ -264,8 +264,8 @@ model_items = to_dict(
                     layer_template(Flatten, ),
     ],
     dns_output = [
-                    layer_template(Dense,   mult(*input_shape), activation='$latent_out_activation'),
-                    layer_template(Reshape, *input_shape),
+                    layer_template(Dense,   mult(*input_shape), activation='sigmoid'),
+                    layer_template(Reshape, input_shape),
     ],
     cnn1_encoder = [
                     layer_template(Conv2D,  32, (3, 3), padding='same', activation='relu'),
@@ -419,7 +419,9 @@ for dn in range(3):
 for k,v in dns_models.items():
     if v is not None:
         continue
-    dns_encoder = [model_items[f'dns{ki}'] for ki in k]
+    dns_encoder = []
+    for ki in k:
+        dns_encoder += model_items[f'dns{ki}']
     dns_decoder = [*dns_encoder]
     dns_decoder.reverse()
     dns_models[k] = to_dict(
