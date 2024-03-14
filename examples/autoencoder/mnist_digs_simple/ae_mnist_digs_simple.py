@@ -500,8 +500,8 @@ for model_name in models:
                 x_train = x_train,
                 y_train = x_train,  # NOTE: x_train is on purpose since it's autoencoder
 
-                x_val   = x_test,
-                y_val   = x_test,   # NOTE: x_test is on purpose since it's autoencoder
+                x_val   = 0.1,
+                y_val   = None,
 
                 x_test  = x_test,
                 y_test  = x_test,   # NOTE: x_test is on purpose since it's autoencoder
