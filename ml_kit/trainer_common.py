@@ -825,7 +825,9 @@ class ModelHandler():
         model_variables : dict | None = None,
         batch_size      : int  | None = 10,
         data_provider   : TrainDataProvider = None,
-        load_weights_only : bool = False
+        save_model          = None,
+        save_weights        = None,
+        load_weights_only   : bool = False,
     ):
         if metrics is None:
             metrics = [S_ACCURACY]
@@ -843,7 +845,19 @@ class ModelHandler():
         self._model          = None
         self._named_layers   = {}
         self.data_provider   = data_provider
+        self.save_model      = save_model
+        self.save_weights    = save_weights
         self.load_weights_only = load_weights_only
+        if self.save_model is None:
+            if load_weights_only:
+                self.save_model = False
+            else:
+                self.save_model = True
+        if self.save_weights is None:
+            if load_weights_only:
+                self.save_weights = True
+            else:
+                self.save_weights = False
 
     @property
     def context(self):
@@ -984,11 +998,36 @@ class ModelHandler():
         print(f"Saving model state to '{path}'")
         with open(path / "context.pickle", "wb") as f:
             pickle.dump(self._context, f)
-        self._model.save(path / "model.keras")
-        self._model.save_weights(path / "model.ckpt")
+        if self.save_model:
+            self._model.save(path / "model.keras")
+        if self.save_weights:
+            self._model.save_weights(path / "model.ckpt")
         with open(path / "model.txt", "w") as f:
             self._model.summary(print_fn=lambda x: f.write(x+"\n"))
         self._context.summary_to_disk(path)
+
+    def is_model_saved(self, path):
+        return (path / "model.keras").exists()
+
+    def is_weights_saved(self, path):
+        return (path / "model.ckpt.index").exists()
+
+    def can_load(self, path, dont_load_model=None, load_weights=None):
+        if dont_load_model is None:
+            dont_load_model = False
+            if self.load_weights_only:
+                load_weights = True
+            else:
+                load_weights = False
+        if load_weights is None:
+            load_weights = False
+        required_paths = [
+            path / "context.pickle",
+        ]
+        if not dont_load_model is True:
+            required_paths.append([path / "model.keras", path / "model.ckpt.index"][load_weights])
+        missing_paths = [p for p in required_paths if not p.exists()]
+        return len(missing_paths) == 0, missing_paths
 
     def load(self, path, dont_load_model=None, load_weights=None):
         if dont_load_model is None:
@@ -1002,6 +1041,9 @@ class ModelHandler():
             if self._model is None:
                 self.create()
         print(f"Loading model state from '{path}'")
+        _, missing_paths = self.can_load(path, dont_load_model, load_weights)
+        if len(missing_paths) > 0:
+            raise ValueError("Following files are missing! "+", ".join(f"'{p}'" for p in missing_paths))
         with open(path / "context.pickle", "rb") as f:
             self._context = pickle.load(f)
         if dont_load_model is False:
@@ -1048,6 +1090,9 @@ class ClassClassifierHandler(ModelHandler):
         model_variables : dict | None = None,
         batch_size      : int  | None = 10,
         data_provider   : TrainDataProvider = None,
+        save_model          = None,
+        save_weights        = None,
+        load_weights_only   : bool = False,
         class_labels    : list[str] = None,
     ):
         super(ClassClassifierHandler, self).__init__(
@@ -1060,6 +1105,9 @@ class ClassClassifierHandler(ModelHandler):
             model_variables,
             batch_size,
             data_provider,
+            save_model,
+            save_weights,
+            load_weights_only,
         )
         self.class_labels    = class_labels
 
@@ -1102,19 +1150,25 @@ class TrainHandler:
 
     def __init__(
         self,
-        data_path   : Path | str,
-        data_name   : Path | str,
-        mhd         : ModelHandler | None,
-        mhd_class   = ModelHandler,
-        on_model_update = None,
-        fit_callbacks = None,
+        data_path               : Path | str,
+        data_name               : Path | str,
+        mhd                     : ModelHandler | None,
+        mhd_class               = ModelHandler,
+        on_model_update         = None,
+        fit_callbacks           = None,
+        dont_save_regular_model : bool = False,
+        dont_save_best_model    : bool = False,
+        cleanup_backups         : bool = False,
     ):
-        self._data_path = data_path
-        self.data_name = data_name
-        self.mhd = mhd
-        self._mhd_class = mhd_class
-        self.on_model_update = on_model_update
-        self.fit_callbacks = fit_callbacks
+        self._data_path         = data_path
+        self.data_name          = data_name
+        self.mhd                = mhd
+        self._mhd_class         = mhd_class
+        self.on_model_update    = on_model_update
+        self.fit_callbacks      = fit_callbacks
+        self.dont_save_regular  = dont_save_regular_model
+        self.dont_save_best     = dont_save_best_model
+        self.cleanup_backups    = cleanup_backups
 
     @property
     def data_path(self):
@@ -1170,8 +1224,11 @@ class TrainHandler:
         with open(save_path / S_COMPLETE, "w") as f:
             # Mark that save is complete
             pass
+        if self.cleanup_backups:
+            if back_path.exists():
+                shutil.rmtree(back_path)
 
-    def is_saved(self, path=S_REGULAR):
+    def is_saved(self, path=S_REGULAR, dont_load_model=None):
         if path == S_REGULAR:
             load_path = self._last_path
             back_path = self._back_path
@@ -1181,8 +1238,8 @@ class TrainHandler:
         else:
             raise ValueError(f"path should be one of {[S_REGULAR, S_BEST]}")
 
-        if (load_path.exists() and (load_path / S_COMPLETE).exists()) \
-        or (back_path.exists() and (back_path / S_COMPLETE).exists()):
+        if (load_path.exists() and (load_path / S_COMPLETE).exists() and self.mhd.can_load(load_path, dont_load_model)[0] is True) \
+        or (back_path.exists() and (back_path / S_COMPLETE).exists() and self.mhd.can_load(load_path, dont_load_model)[0] is True):
             return True
         return False
 
@@ -1229,8 +1286,16 @@ class TrainHandler:
         else:
             self.load(S_BEST)       # will raise error, as intended
 
+    def can_load(self, path, dont_load_model=None):
+        return self.is_saved(path, dont_load_model)
+
     def clear_saved_data(self):
         for path in (self._last_path, self._back_path, self._best_path, self._bbak_path):
+            if path.exists():
+                shutil.rmtree(path)
+
+    def clear_backups(self):
+        for path in (self._back_path, self._bbak_path):
             if path.exists():
                 shutil.rmtree(path)
 
