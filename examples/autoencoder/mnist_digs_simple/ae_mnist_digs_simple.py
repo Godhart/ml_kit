@@ -430,6 +430,10 @@ for k,v in dns_models.items():
     dns_decoder.reverse()
     dns_models[k] = to_dict(
         model_class = Model,
+        mhd_kwargs = to_dict(
+            save_model = False,
+            save_weights = False,
+        ),
         vars = to_dict(
         ),
         template = to_dict(
@@ -585,6 +589,8 @@ for model_name in models:
                 y_test  = x_test,   # NOTE: x_test is on purpose since it's autoencoder
             )
 
+            mhd_kwargs = model_data.get('mhd_kwargs', {})
+
             mhd = ModelHandler(
                 name            = run_name,
                 model_class     = model_data['model_class'],
@@ -596,6 +602,7 @@ for model_name in models:
                 batch_size      = data_vars.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
                 data_provider   = data_provider,
                 load_weights_only = True,   # NOTE: True since named layers are used
+                **mhd_kwargs
             )
 
             def on_model_update(thd):
@@ -611,30 +618,92 @@ for model_name in models:
                 mhd_class       = ModelHandler,
                 on_model_update = on_model_update,
                 fit_callbacks   = [ae_callback],
+                cleanup_backups = True,
             )
 
             def display_callback(*args, **kwargs):
                 pass
 
-            thd.train(
-                from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
-                epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
-                target          = model_data.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET]),
-                save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
-                display_callback= display_callback,
-            )
+            # Check if saved results are enough even if model is not saved
+            best_simple_avail = thd.can_load(S_BEST, dont_load_model=True)
+            regular_simple_avail = thd.can_load(S_REGULAR, dont_load_model=True)
+            enough = False
+            can_pred = True
+            if best_simple_avail or regular_simple_avail:
+                thd_tmp = TrainHandler(
+                    # NOTE: used only to load data and hold best value
+                    data_path       = thd.data_path,
+                    data_name       = thd.data_name,
+                    mhd             = thd._mhd_class(
+                        name=thd.data_name,
+                        model_class=None,
+                        optimizer=None,
+                        loss=None,
+                        metrics=thd._mhd.metrics,
+                    ),
+                )
+                for load_path in S_REGULAR, S_BEST:
+                    thd_tmp.load(load_path, dont_load_model=True)
+                    if thd_tmp.mhd.context.epoch >= model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]) \
+                    or thd.is_enough(model_data.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET])):
+                        enough = True
+                        break
+
+            if not enough:
+                thd.train(
+                    from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
+                    epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
+                    target          = model_data.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET]),
+                    save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
+                    display_callback= display_callback,
+                )
+            else:
+                if thd.can_load(S_REGULAR):
+                    thd.load(S_REGULAR)
+                elif regular_simple_avail:
+                    thd.load(S_REGULAR, dont_load_model=True)
+                    can_pred = False
+                elif thd.can_load(S_BEST):
+                    thd.load(S_BEST)
+                else:
+                    thd.load(S_BEST, dont_load_model=True)
+                    can_pred = False
 
             # Вывод результатов для сравнения
             full_history = copy.deepcopy(mhd.context.history)
 
             epoch_last = mhd.context.epoch
-            mhd.update_data(force=True)
-            pred_last = mhd.context.test_pred
+            if can_pred:
+                mhd.update_data(force=True)
+                pred_last = mhd.context.test_pred
+            else:
+                mhd.create()    # NOTE: required to print model info
+                pred_last = None
 
-            thd.load_best()
-            epoch_best = mhd.context.epoch
-            mhd.update_data(force=True)
-            pred_best = mhd.context.test_pred
+            if thd.can_load(S_BEST):
+                thd.load_best()
+                epoch_best = mhd.context.epoch
+                mhd.update_data(force=True)
+                pred_best = mhd.context.test_pred
+            elif thd.can_load(S_BEST, dont_load_model=True):
+                thd_tmp = TrainHandler(
+                    # NOTE: used only to load data and hold best value
+                    data_path       = thd.data_path,
+                    data_name       = thd.data_name,
+                    mhd             = thd._mhd_class(
+                        name=thd.data_name,
+                        model_class=None,
+                        optimizer=None,
+                        loss=None,
+                        metrics=thd._mhd.metrics,
+                    ),
+                )
+                thd_tmp.load(S_BEST, dont_load_model=True)
+                epoch_best = thd_tmp.mhd.context.epoch
+                pred_best = None
+            else:
+                epoch_best = None
+                pred_best = None
 
             mhd.context.report_history = full_history
 
