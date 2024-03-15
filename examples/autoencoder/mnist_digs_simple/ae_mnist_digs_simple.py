@@ -251,7 +251,7 @@ model_items = to_dict(
                     layer_template(Dense,   2,  activation='relu', _name_='latent'),
     ],
     dns1       = [
-                    layer_template(Dense,   28*28*10,),
+                    layer_template(Dense,   28*28*2,),
     ],
     dns2       = [
                     layer_template(Dense,   14*14,),
@@ -414,6 +414,10 @@ for dn in range(3):
         for dj in range(3):
             for dk in range(3):
                 idx = tuple([di+1,dj+1,dk+1][:dn+1])
+                if len([v for v in idx if v==1]) > 1:
+                    continue
+                if idx in dns_models:
+                    continue
                 dns_models[idx] = None
 
 for k,v in dns_models.items():
