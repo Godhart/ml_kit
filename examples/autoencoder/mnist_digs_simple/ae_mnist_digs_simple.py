@@ -178,7 +178,7 @@ if STANDALONE:
     from ml_kit.helpers import *
     from ml_kit.trainer_common import *
     from ml_kit.plots import *
-    from ml_kit.trainer_series import *
+    import ml_kit.boilerplate as bp
 
 # ---------------------------------------------------------------------------- #
 
@@ -210,7 +210,7 @@ ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-3
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = S_MSE
 ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_MSE]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 128
-ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 10
+ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 2
 ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_MSE: 0.034}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
@@ -314,6 +314,9 @@ models = to_dict(
             latent = 'native',
             latent_out_activation = 'sigmoid',
         ),
+        thd_kwargs = to_dict(
+            fit_callbacks   = [ae_callback],
+        ),
         template = to_dict(
             encoder = to_dict(
                 input  = True,
@@ -331,6 +334,9 @@ models = to_dict(
         vars = to_dict(
             latent = 'cnn1',
             latent_out_activation = 'relu',
+        ),
+        thd_kwargs = to_dict(
+            fit_callbacks   = [ae_callback],
         ),
         template = to_dict(
             encoder = to_dict(
@@ -358,6 +364,9 @@ models = to_dict(
             latent = 'cnn2',
             latent_out_activation = 'relu',
         ),
+        thd_kwargs = to_dict(
+            fit_callbacks   = [ae_callback],
+        ),
         template = to_dict(
             encoder = to_dict(
                 input  = True,
@@ -384,6 +393,9 @@ models = to_dict(
         model_class = Model,
         vars = to_dict(
         ),
+        thd_kwargs = to_dict(
+            fit_callbacks   = [ae_callback],
+        ),
         template = to_dict(
             encoder = to_dict(
                 input  = True,
@@ -407,6 +419,10 @@ models = to_dict(
 
 )
 
+models = {
+    'latent': models['latent'],
+}
+
 dns_models = {}
 
 for dn in range(3):
@@ -420,6 +436,7 @@ for dn in range(3):
                     continue
                 dns_models[idx] = None
 
+xx = 2
 for k,v in dns_models.items():
     if v is not None:
         continue
@@ -433,6 +450,9 @@ for k,v in dns_models.items():
         mhd_kwargs = to_dict(
             save_model = False,
             save_weights = False,
+        ),
+        thd_kwargs = to_dict(
+            fit_callbacks   = [ae_callback],
         ),
         vars = to_dict(
         ),
@@ -456,6 +476,9 @@ for k,v in dns_models.items():
         ),
     )
     models['dns'+''.join(str(ki) for ki in k)] = dns_models[k]
+    xx -= 1
+    if xx <= 0:
+        break
 
 # ---------------------------------------------------------------------------- #
 
@@ -465,13 +488,17 @@ for k,v in dns_models.items():
 # Гиперпараметры
 
 hp_defaults = to_dict(
-        tabs=['learn', 'lanim'],
+        tabs=['learn', 'animo', 'XvsY'],
 )
 
 data_common_vars=to_dict(
     # shuffle         = False,
+)
+
+train_common_vars=to_dict(
     # batch_size      = 128,
 )
+
 
 hp_template = to_dict(
     **hp_defaults,
@@ -480,6 +507,9 @@ hp_template = to_dict(
     ),
     data_vars={
         **data_common_vars,
+    },
+    train_vars={
+        **train_common_vars,
     },
 )
 
@@ -497,36 +527,14 @@ if True:
 ###
 # Создать вкладки для вывода результатов
 
-def get_tab(tab_id, model_name, hp_name, hp):
-    return tab_id, f"{model_name}--{hp_name}"
+from IPython.display import display
 
-from IPython.display import clear_output, display
-import ipywidgets as widgets
-from functools import lru_cache
-
-model_tabs = {}
-tabs_dict = {}
-for model_name in models:
-    for hp_name, hp in hyper_params_sets.items():
-        for tab_id in hp['tabs']:
-            tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
-            if tab_group not in tabs_dict:
-                tabs_dict[tab_group] = {}
-            widget = tabs_dict[tab_group][tab_i] = widgets.Output()
-            with widget:
-                # По умолчанию заполнить текст вкладок информацией о параметрах модели
-                clear_output()
-                print(f"{model_name}--{hp_name}")
-
-tabs_objs = {k: widgets.Tab() for k in tabs_dict}
-for k, v in tabs_dict.items():
-    tab_items_keys = list(sorted(v.keys()))
-    tabs_objs[k].children = [v[kk] for kk in tab_items_keys]
-    for i in range(0, len(tab_items_keys)):
-        tabs_objs[k].set_title(i, f"{k}:{tab_items_keys[i]}")
+tabs_dict, tabs_objs = bp.make_tabs(
+    models,
+    hyper_params_sets,
+)
 
 tabs_objs.keys()
-#display(tabs_objs["xxx"])
 
 # ---------------------------------------------------------------------------- #
 
@@ -548,192 +556,89 @@ display(tabs_objs["learn"])
 ###
 # Подготовка данных, обучение, вывод результатов
 
-dummy_output = widgets.Output()
+def prepare(    model_name,
+    model_data,
+    hp_name,
+    hp,
+):
+    model_vars = hp['model_vars']
+    data_vars = hp['data_vars']
+    train_vars = hp['train_vars']
 
-for model_name in models:
-    for hp_name in hyper_params_sets:
-        def main_logic(model_name, hp_name):
+    latent_ref = model_vars.get('latent', None)
+    if latent_ref is not None:
+        if isinstance(latent_ref, str):
+            model_vars['latent_expand_size'] = latent_expand_size[model_vars.get('latent', 'native')]
+        else:
+            model_vars['latent_expand_size'] = latent_ref
+        model_vars['latent_expand_size_flat'] = mult(*model_vars['latent_expand_size'])
 
-            hp = copy.deepcopy(hyper_params_sets[hp_name])
-            if 'model' not in hp:
-                hp['model'] = model_name
-            else:
-                raise ValueError("'model' should be omitted in hyper params for this very case!")
+    data_provider = TrainDataProvider(
+        x_train = x_train,
+        y_train = x_train,  # NOTE: x_train is on purpose since it's autoencoder
 
-            model_data = models[model_name]
+        x_val   = 0.1,
+        y_val   = None,
 
-            run_name = f"{model_name}--{hp_name}"
-            print(f"Running {run_name}")
+        x_test  = x_test,
+        y_test  = x_test,   # NOTE: x_test is on purpose since it's autoencoder
+    )
 
-            data_vars = hp['data_vars']
+    return data_provider
 
-            model_vars = copy.deepcopy(model_data['vars'])
-            model_vars = {**model_vars, **copy.deepcopy(hp['model_vars'])}
 
-            latent_ref = model_vars.get('latent', None)
-            if latent_ref is not None:
-                if isinstance(latent_ref, str):
-                    model_vars['latent_expand_size'] = latent_expand_size[model_vars.get('latent', 'native')]
-                else:
-                    model_vars['latent_expand_size'] = latent_ref
-                model_vars['latent_expand_size_flat'] = mult(*model_vars['latent_expand_size'])
+def on_model_update(thd):
+    # TODO: make two models instead of single branched so encoder can be used to visualize latent space, named layers wont work for this
+    return
+    EPOCH_CALLBACK_DATA['latent'] = thd.mhd.models['encoder_model']
+    EPOCH_CALLBACK_DATA['save_path'] = Path(thd.data_path) / "latent"
 
-            data_provider = TrainDataProvider(
-                x_train = x_train,
-                y_train = x_train,  # NOTE: x_train is on purpose since it's autoencoder
 
-                x_val   = 0.1,
-                y_val   = None,
+bp.train_routine(
+    models,
+    hyper_params_sets,
+    tabs_dict,
+    preparation_call=prepare,
+    on_model_update_call=on_model_update,
+)
 
-                x_test  = x_test,
-                y_test  = x_test,   # NOTE: x_test is on purpose since it's autoencoder
-            )
 
-            mhd_kwargs = model_data.get('mhd_kwargs', {})
+if False:
+    import imageio                            # Подключение библиотеки для сборки анимации
+    images = []                               # Пустой список под изображения для gif
+    for i in range(epochs):                   # Покадровая сборка gif-анимации
+        images.append(imageio.imread(f'image{str(i)}.jpg'))
+    imageio.mimsave('AE.gif', images)         # Сохранение анимации
 
-            mhd = ModelHandler(
-                name            = run_name,
-                model_class     = model_data['model_class'],
-                optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
-                loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
-                metrics         = model_data.get('metrics',   hp.get('metrics', ENV[ENV__TRAIN__DEFAULT_METRICS])),
-                model_template  = model_data['template'],
-                model_variables = model_vars,
-                batch_size      = data_vars.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
-                data_provider   = data_provider,
-                load_weights_only = True,   # NOTE: True since named layers are used
-                **mhd_kwargs
-            )
+    from IPython.display import Image         # Подключаем модуля для показа gif в ячейке
+    Image(open('AE.gif','rb').read())         # Показ анимации
 
-            def on_model_update(thd):
-                # TODO: make two models instead of branched so encoder can be used to visualize latent space
-                return
-                EPOCH_CALLBACK_DATA['latent'] = encoder_model
-                EPOCH_CALLBACK_DATA['save_path'] = Path(thd.data_path) / "latent"
+# Функция последовательного вывода нескольких изображений для сравнения
+def plot_images(x_data, pred, n=5):
 
-            thd = TrainHandler(
-                data_path       = ENV[ENV__MODEL__DATA_ROOT] / model_data.get("data_path", ENV[ENV__TRAIN__DEFAULT_DATA_PATH]),
-                data_name       = run_name,
-                mhd             = mhd,
-                mhd_class       = ModelHandler,
-                on_model_update = on_model_update,
-                fit_callbacks   = [ae_callback],
-                cleanup_backups = True,
-            )
+    plt.figure(figsize=(14, 7))                             # Размер полотна
 
-            def display_callback(*args, **kwargs):
-                pass
+    for i in range(1, n + 1):                               # Повтор n раз:
+        index = np.random.randint(0, pred.shape[0])         # Выбор случайного индекса
 
-            # Check if saved results are enough even if model is not saved
-            best_simple_avail = thd.can_load(S_BEST, dont_load_model=True)
-            regular_simple_avail = thd.can_load(S_REGULAR, dont_load_model=True)
-            enough = False
-            can_pred = True
-            if best_simple_avail or regular_simple_avail:
-                thd_tmp = TrainHandler(
-                    # NOTE: used only to load data and hold best value
-                    data_path       = thd.data_path,
-                    data_name       = thd.data_name,
-                    mhd             = thd._mhd_class(
-                        name=thd.data_name,
-                        model_class=None,
-                        optimizer=None,
-                        loss=None,
-                        metrics=thd._mhd.metrics,
-                    ),
-                )
-                for load_path in S_REGULAR, S_BEST:
-                    thd_tmp.load(load_path, dont_load_model=True)
-                    if thd_tmp.mhd.context.epoch >= model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]) \
-                    or thd.is_enough(model_data.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET])):
-                        enough = True
-                        break
+        # Показ картинки с индексом index из набора x_data
+        ax = plt.subplot(2, n, i)                           # Картинка располагается в верхнем ряду
+        plt.imshow(x_data[index].squeeze(), cmap='gray')
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
 
-            if not enough:
-                thd.train(
-                    from_scratch    = model_data.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
-                    epochs          = model_data.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
-                    target          = model_data.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET]),
-                    save_step       = model_data.get("save_step", ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]),
-                    display_callback= display_callback,
-                )
-            else:
-                if thd.can_load(S_REGULAR):
-                    thd.load(S_REGULAR)
-                elif regular_simple_avail:
-                    thd.load(S_REGULAR, dont_load_model=True)
-                    can_pred = False
-                elif thd.can_load(S_BEST):
-                    thd.load(S_BEST)
-                else:
-                    thd.load(S_BEST, dont_load_model=True)
-                    can_pred = False
+        # Показ картинки с тем же индексом из предсказания автокодировщика
+        ax = plt.subplot(2, n, i + n)                       # Картинка располагается в нижнем ряду
+        plt.imshow(pred[index].squeeze(), cmap='gray')
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
 
-            # Вывод результатов для сравнения
-            full_history = copy.deepcopy(mhd.context.history)
+    plt.show()
 
-            epoch_last = mhd.context.epoch
-            if can_pred:
-                mhd.update_data(force=True)
-                pred_last = mhd.context.test_pred
-            else:
-                mhd.create()    # NOTE: required to print model info
-                pred_last = None
+if False:
+    # Получение предсказания автокодировщика на тренировочной и тестовой выборках
+    pred_train_mnist = ae_mnist.predict(x_train_mnist)
+    pred_test_mnist = ae_mnist.predict(x_test_mnist)
 
-            if thd.can_load(S_BEST):
-                thd.load_best()
-                epoch_best = mhd.context.epoch
-                mhd.update_data(force=True)
-                pred_best = mhd.context.test_pred
-            elif thd.can_load(S_BEST, dont_load_model=True):
-                thd_tmp = TrainHandler(
-                    # NOTE: used only to load data and hold best value
-                    data_path       = thd.data_path,
-                    data_name       = thd.data_name,
-                    mhd             = thd._mhd_class(
-                        name=thd.data_name,
-                        model_class=None,
-                        optimizer=None,
-                        loss=None,
-                        metrics=thd._mhd.metrics,
-                    ),
-                )
-                thd_tmp.load(S_BEST, dont_load_model=True)
-                epoch_best = thd_tmp.mhd.context.epoch
-                pred_best = None
-            else:
-                epoch_best = None
-                pred_best = None
-
-            mhd.context.report_history = full_history
-
-            with dummy_output:
-                plt.show()
-                clear_output()
-
-            for tab_id in hp['tabs']:
-                tab_group, tab_i = get_tab(tab_id, model_name, hp_name, hp)
-                with tabs_dict[tab_group][tab_i]:
-                    clear_output()
-                    print(f"Модель         : {hp['model']}")
-                    print(f"Гиперпараметры : {hp_name}")
-                    print(f"Последняя эпоха: {epoch_last}")
-                    print(f"Лучшая эпоха   : {epoch_best}")
-                    print("")
-                    if "learn" in tab_id:
-                        mhd.context.report_to_screen()
-                        mhd.model.summary()
-
-                        utils.plot_model(mhd.model, dpi=60)
-                        plt.show()
-                    elif "lanim" in tab_id:
-                        pass
-
-                with dummy_output:
-                    plt.show()
-                    clear_output()
-
-            mhd.context.report_history = None
-            mhd.unload_model()
-
-        main_logic(model_name, hp_name)
+    # Сравнение исходных и восстановленных картинок из тестовой выборки
+    plot_images(x_test_mnist, pred_test_mnist)
