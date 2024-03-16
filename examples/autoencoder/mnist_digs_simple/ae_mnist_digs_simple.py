@@ -210,7 +210,7 @@ ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-3
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = S_MSE
 ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_MSE]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 128
-ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 2
+ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 10
 ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_MSE: 0.034}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
@@ -601,44 +601,3 @@ bp.train_routine(
     preparation_call=prepare,
     on_model_update_call=on_model_update,
 )
-
-
-if False:
-    import imageio                            # Подключение библиотеки для сборки анимации
-    images = []                               # Пустой список под изображения для gif
-    for i in range(epochs):                   # Покадровая сборка gif-анимации
-        images.append(imageio.imread(f'image{str(i)}.jpg'))
-    imageio.mimsave('AE.gif', images)         # Сохранение анимации
-
-    from IPython.display import Image         # Подключаем модуля для показа gif в ячейке
-    Image(open('AE.gif','rb').read())         # Показ анимации
-
-# Функция последовательного вывода нескольких изображений для сравнения
-def plot_images(x_data, pred, n=5):
-
-    plt.figure(figsize=(14, 7))                             # Размер полотна
-
-    for i in range(1, n + 1):                               # Повтор n раз:
-        index = np.random.randint(0, pred.shape[0])         # Выбор случайного индекса
-
-        # Показ картинки с индексом index из набора x_data
-        ax = plt.subplot(2, n, i)                           # Картинка располагается в верхнем ряду
-        plt.imshow(x_data[index].squeeze(), cmap='gray')
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
-
-        # Показ картинки с тем же индексом из предсказания автокодировщика
-        ax = plt.subplot(2, n, i + n)                       # Картинка располагается в нижнем ряду
-        plt.imshow(pred[index].squeeze(), cmap='gray')
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
-
-    plt.show()
-
-if False:
-    # Получение предсказания автокодировщика на тренировочной и тестовой выборках
-    pred_train_mnist = ae_mnist.predict(x_train_mnist)
-    pred_test_mnist = ae_mnist.predict(x_test_mnist)
-
-    # Сравнение исходных и восстановленных картинок из тестовой выборки
-    plot_images(x_test_mnist, pred_test_mnist)
