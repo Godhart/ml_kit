@@ -2,6 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 
+S_ROWS = 'rows'
+S_COLS = 'cols'
+S_GRAY = 'gray'
 
 class GraphDef:
 
@@ -58,7 +61,7 @@ def plot_graph(
         subplot.legend()
 
 
-def plot_to_multiple_rows(
+def plot_graph_to_multiple_rows(
         subplots,
         data2d  : np.array,
         rows    : list[GraphDef],
@@ -109,3 +112,23 @@ def plot_to_multiple_rows(
 
     # NOTE: create subplots with something like this
     # fig, subplots = plt.subplots(len(rows), 1, figsize=(22,13), sharex=sharex)
+
+
+def plot_images(images, rows, cols, ordering=S_ROWS, cmap=S_GRAY):
+    idx = 0
+    for img in images:
+        ax = plt.subplot(rows, cols, idx)
+        plt.imshow(img, cmap=cmap)
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        if ordering==S_ROWS:
+            idx += 1
+        elif ordering==S_COLS:
+            idx += cols
+            if idx > rows*cols:
+                idx = (idx+1) % cols
+        else:
+            raise ValueError(f"'ordering' should be '{S_ROWS}' or '{S_COLS}'")
+
+    # NOTE: create figure with something like this `plt.figure(figsize=(14, 7))` before call
+    # show figure with `plt.show()` after call
