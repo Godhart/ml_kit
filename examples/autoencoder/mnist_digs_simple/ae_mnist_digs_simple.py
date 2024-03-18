@@ -570,9 +570,22 @@ if True:
 
 from IPython.display import display
 
+def get_tab_run(tab_id, model_name, model_data, hp_name, hp):
+    if model_name[:3] == "dns":
+        tab_suffix, model_name = model_name.split("-", 1)
+        if tab_id is not None:
+            if "-" not in tab_id:
+                tab_id += "-" + tab_suffix
+    else:
+        if tab_id is not None:
+            if "-" not in tab_id:
+                tab_id += "-cnn"
+    return tab_id, f"{model_name}--{hp_name}"
+
 tabs_dict, tabs_objs = bp.make_tabs(
     models,
     hyper_params_sets,
+    get_tab_run_call=get_tab_run
 )
 
 tabs_objs.keys()
@@ -583,7 +596,7 @@ tabs_objs.keys()
 
 ## Базовая информация по моделям и итогам обучения
 
-display(tabs_objs["learn"])
+# display(tabs_objs["learn"])
 
 
 # ---------------------------------------------------------------------------- #
@@ -605,6 +618,12 @@ def prepare(    model_name,
     model_vars = hp['model_vars']
     data_vars = hp['data_vars']
     train_vars = hp['train_vars']
+
+    original_tabs = [*hp['tabs']]
+    hp['tabs'] = []
+    for v in original_tabs:
+        tab_id, _ = get_tab_run(v, model_name, model_data, hp_name, hp)
+        hp['tabs'].append(tab_id)
 
     latent_ref = model_vars.get('latent', None)
     if latent_ref is not None:
@@ -635,10 +654,67 @@ def on_model_update(thd):
     EPOCH_CALLBACK_DATA['save_path'] = Path(thd.data_path) / "latent"
 
 
+def print_to_tab(
+    model_name,
+    model_data,
+    hp_name,
+    hp,
+    run_name,
+    mhd,
+    thd,
+    tab_group,
+    tab_name,
+    last_metrics,
+    best_metrics,
+):
+    tab_print_map = {}
+    for tab_id in hp['tabs']:
+        if 'learn' in tab_id:
+            tab_print_map[tab_id] = bp.print_to_tab_learn
+
+    print_call = tab_print_map.get(tab_group, None)
+    if print_call is None:
+        bp.print_to_tab_fallback(
+            model_name,
+            model_data,
+            hp_name,
+            hp,
+            run_name,
+            mhd,
+            thd,
+            tab_group,
+            tab_name,
+            last_metrics,
+            best_metrics,
+        )
+        return
+
+    print(f"Модель         : {hp['model']}")
+    print(f"Гиперпараметры : {hp_name}")
+    print(f"Последняя эпоха: {last_metrics['epoch']}")
+    print(f"Лучшая эпоха   : {best_metrics['epoch']}")
+    print("")
+    print_call(
+        model_name,
+        model_data,
+        hp_name,
+        hp,
+        run_name,
+        mhd,
+        thd,
+        tab_group,
+        tab_name,
+        last_metrics,
+        best_metrics,
+    )
+
+
 bp.train_routine(
     models,
     hyper_params_sets,
     tabs_dict,
     preparation_call=prepare,
     on_model_update_call=on_model_update,
+    get_tab_run_call=get_tab_run,
+    print_to_tab_call=print_to_tab,
 )
