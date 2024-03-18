@@ -9,6 +9,7 @@ Pillow
 PyYAML
 torch
 pydot
+imageio
 
 # ?gdown
 # ?matplotlib-inline
