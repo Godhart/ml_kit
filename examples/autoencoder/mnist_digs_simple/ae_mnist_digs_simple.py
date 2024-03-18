@@ -248,16 +248,16 @@ model_items = to_dict(
                     layer_template(Reshape, "$latent_expand_size"),
     ],
     latent_dns = [
-                    layer_template(Dense,   2,  activation='relu', _name_='latent'),
+                    layer_template(Dense,   2,  activation='$latent_out_activation', _name_='latent'),
     ],
     dns1       = [
-                    layer_template(Dense,   28*28*2,),
+                    layer_template(Dense,   28*28*2, activation='$ae_activation'),
     ],
     dns2       = [
-                    layer_template(Dense,   14*14,),
+                    layer_template(Dense,   14*14, activation='$ae_activation'),
     ],
     dns3       = [
-                    layer_template(Dense,   7*7,),
+                    layer_template(Dense,   7*7, activation='$ae_activation'),
     ],
     dns_input  = [
                     layer_template(Input,   input_shape),
@@ -436,49 +436,65 @@ for dn in range(3):
                     continue
                 dns_models[idx] = None
 
-xx = 1000000
-for k,v in dns_models.items():
-    if v is not None:
-        continue
-    dns_encoder = []
-    for ki in k:
-        dns_encoder += model_items[f'dns{ki}']
-    dns_decoder = [*dns_encoder]
-    dns_decoder.reverse()
-    dns_models[k] = to_dict(
-        model_class = Model,
-        mhd_kwargs = to_dict(
-            save_model = False,
-            save_weights = False,
-        ),
-        thd_kwargs = to_dict(
-            fit_callbacks   = [ae_callback],
-        ),
-        vars = to_dict(
-        ),
-        template = to_dict(
-            encoder = to_dict(
-                input  = True,
-                layers = [
-                    *model_items['dns_input'],
-                    *dns_encoder,
-                    *model_items['latent_dns'],
-                ],
-            ),
-            decoder = to_dict(
-                parents = 'encoder',
-                output  = True,
-                layers = [
-                    *dns_decoder,
-                    *model_items['dns_output']
-                ],
-            ),
-        ),
-    )
-    models['dns'+''.join(str(ki) for ki in k)] = dns_models[k]
-    xx -= 1
-    if xx <= 0:
-        break
+for bn in (True, False):
+    for ae_act in ('relu', 'sigmoid', 'tanh'):
+        for lat_act in ('relu', 'sigmoid', 'tanh'):
+            xx = 3
+            for k,v in dns_models.items():
+                if v is not None:
+                    continue
+                dns_encoder = []
+                for ki in k:
+                    dns_encoder += model_items[f'dns{ki}']
+                dns_decoder = [*dns_encoder]
+                dns_decoder.reverse()
+                if bn:
+                    for arr in (dns_encoder, dns_decoder):
+                        tmp = [*arr]
+                        arr.clear()
+                        for item in tmp:
+                            arr.append(item)
+                            arr.append(layer_template(BatchNormalization, ))
+                dns_models[k] = to_dict(
+                    model_class = Model,
+                    mhd_kwargs = to_dict(
+                        save_model = False,
+                        save_weights = False,
+                    ),
+                    thd_kwargs = to_dict(
+                        fit_callbacks   = [ae_callback],
+                    ),
+                    vars = to_dict(
+                        ae_activation = ae_act,
+                        latent_out_activation = lat_act,
+                    ),
+                    template = to_dict(
+                        encoder = to_dict(
+                            input  = True,
+                            layers = [
+                                *model_items['dns_input'],
+                                *dns_encoder,
+                                *model_items['latent_dns'],
+                            ],
+                        ),
+                        decoder = to_dict(
+                            parents = 'encoder',
+                            output  = True,
+                            layers = [
+                                *dns_decoder,
+                                *model_items['dns_output']
+                            ],
+                        ),
+                    ),
+                )
+                model_name = 'dns'+''.join(str(ki) for ki in k)
+                if bn:
+                    model_name += "b"
+                model_name += "_" + ae_act + lat_act
+                models[model_name] = dns_models[k]
+                xx -= 1
+                if xx <= 0:
+                    break
 
 # ---------------------------------------------------------------------------- #
 
