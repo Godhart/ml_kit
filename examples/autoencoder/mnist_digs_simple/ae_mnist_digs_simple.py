@@ -437,8 +437,11 @@ for dn in range(3):
                 dns_models[idx] = None
 
 for bn in (True, False):
-    for ae_act in ('relu', 'sigmoid', 'tanh'):
-        for lat_act in ('relu', 'sigmoid', 'tanh'):
+    for ae_act in ('relu', 'sigmoid', 'tanh', 'elu', 'softsign', 'softplus',
+                   'mish'):
+        for lat_act in ('relu', 'sigmoid', 'tanh', 'same'):
+            if lat_act == 'same':
+                lat_act = ae_act
             xx = 3
             for k,v in dns_models.items():
                 if v is not None:
