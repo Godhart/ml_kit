@@ -197,6 +197,20 @@ TRAIN_EXCLUDE = None  # Ничего не исключать
 # TRAIN_INCLUDE = []
 # TRAIN_EXCLUDE = []
 
+def use_model(model_name):
+    if TRAIN_EXCLUDE is not None:
+        for item in TRAIN_EXCLUDE:
+            if re.match(item, model_name) is not None:
+                return False
+    if TRAIN_INCLUDE is None:
+        return True
+    else:
+        for item in TRAIN_INCLUDE:
+            if re.match(item, model_name) is not None:
+                return True
+        return False
+
+
 ENV[ENV__DEBUG_PRINT] = True
 
 # Подключение google диска если работа в ноутбуке
@@ -306,7 +320,7 @@ latent_expand_size = {
     "cnn2"      : (7,7,64),
 }
 
-models = to_dict(
+cnn_models = to_dict(
 
     latent = to_dict(
         model_class = Model,
@@ -419,33 +433,40 @@ models = to_dict(
 
 )
 
-models = {
-    'latent': models['latent'],
-}
+dns_models_proto = {}
 
-dns_models = {}
-
+xx = 3
 for dn in range(3):
     for di in range(3):
         for dj in range(3):
             for dk in range(3):
+                if xx <= 0:
+                    continue
                 idx = tuple([di+1,dj+1,dk+1][:dn+1])
                 if len([v for v in idx if v==1]) > 1:
                     continue
-                if idx in dns_models:
+                if idx in dns_models_proto:
                     continue
-                dns_models[idx] = None
+                dns_models_proto[idx] = None
+                xx -= 1
+
+dns_models = {}
 
 for bn in (True, False):
-    for ae_act in ('relu', 'sigmoid', 'tanh', 'elu', 'softsign', 'softplus',
-                   'mish'):
+    for ae_act in ('relu', 'sigmoid', 'tanh'): # TODO: also try , 'elu', 'softsign', 'softplus', 'mish'):
         for lat_act in ('relu', 'sigmoid', 'tanh', 'same'):
             if lat_act == 'same':
                 lat_act = ae_act
-            xx = 3
-            for k,v in dns_models.items():
-                if v is not None:
+            for k,v in dns_models_proto.items():
+
+                model_name = 'dns'+''.join(str(ki) for ki in k)
+                if bn:
+                    model_name += "b"
+                model_name += "-" + ae_act + "-" + lat_act
+
+                if not use_model(model_name):
                     continue
+
                 dns_encoder = []
                 for ki in k:
                     dns_encoder += model_items[f'dns{ki}']
@@ -458,7 +479,7 @@ for bn in (True, False):
                         for item in tmp:
                             arr.append(item)
                             arr.append(layer_template(BatchNormalization, ))
-                dns_models[k] = to_dict(
+                k_model = to_dict(
                     model_class = Model,
                     mhd_kwargs = to_dict(
                         save_model = False,
@@ -490,14 +511,15 @@ for bn in (True, False):
                         ),
                     ),
                 )
-                model_name = 'dns'+''.join(str(ki) for ki in k)
-                if bn:
-                    model_name += "b"
-                model_name += "_" + ae_act + lat_act
-                models[model_name] = dns_models[k]
-                xx -= 1
-                if xx <= 0:
-                    break
+
+                dns_models[model_name] = k_model
+
+models = {}
+for models_candidates in (cnn_models, dns_models):
+    for k, v in models_candidates.items():
+        if not use_model(k):
+            continue
+        models[k] = v
 
 # ---------------------------------------------------------------------------- #
 
