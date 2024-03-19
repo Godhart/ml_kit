@@ -4,6 +4,22 @@ from pathlib import Path
 import numpy as np
 import imageio
 
+from IPython.display import display, Markdown, Latex
+
+import sys
+from pathlib import Path
+
+ml_kit_path = str((Path(__file__).absolute() / ".." / "..").resolve())
+if ml_kit_path not in sys.path:
+    sys.path.insert(0, ml_kit_path)
+
+try:
+    from ml_kit.standalone import STANDALONE
+except ImportError:
+    STANDALONE = False
+
+if STANDALONE:
+    from ml_kit.env import *
 
 def pick_random_pairs(paired_arrays, amount):
     result = []
@@ -55,3 +71,60 @@ def animate_imgs(input_path, filename_regex, output_path, recurse=False):
     # from IPython.display import Image
     # animate_imgs(some_path, "img_\d\d\d\d\.jpg", some_path / 'anim.gif')
     # Image(open(some_path / 'anim.gif','rb').read())
+
+
+# NOTE: printing to markdown tips
+# display(Markdown('*some markdown* $\phi$'))
+# # If you particularly want to display maths, this is more direct:
+# display(Latex('\phi'))
+
+
+def print_markdown(message):
+    if ENV[ENV__JUPYTER]:
+        display(Markdown(message))
+    else:
+        print(message)
+
+
+def print_latex(expr):
+    if ENV[ENV__JUPYTER]:
+        display(Latex(expr))
+    else:
+        print(expr)
+
+
+def print_table(header, data):
+    message = []
+    message.append("")
+    message.append("| " + " | ".join(str(v) for v in header) + " |")
+    message.append("|-" + "-|-".join("-" for v in header) + "-|")
+    for item in data:
+        message.append("| " + " | ".join(str(v) for v in item) + " |")
+    message.append("")
+    message = "\n".join(message)
+    print_markdown(message)
+
+
+def dict_to_table(data, header=None, dict_key=None, default='', sort_key=None):
+    if dict_key is None:
+        dict_key = '_key_'
+    if header is None:
+        header = [dict_key]
+        for k, v in data.items():
+            for kk in v:
+                if kk not in header:
+                    header.append(kk)
+
+    rows = []
+    sorted_keys = sorted(data.keys(), key=sort_key)
+    for k  in sorted_keys:
+        row = [default]*len(header)
+        if dict_key in header:
+            row[header.index(dict_key)] = k
+        for kk, vv in data[k].items():
+            if kk not in header:
+                continue
+            row[header.index(kk)] = vv
+        rows.append(row)
+
+    return header, rows
