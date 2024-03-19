@@ -115,7 +115,7 @@ def plot_graph_to_multiple_rows(
 
 
 def plot_images(images, rows, cols, ordering=S_ROWS, cmap=S_GRAY):
-    idx = 0
+    idx = 1
     for img in images:
         ax = plt.subplot(rows, cols, idx)
         plt.imshow(img, cmap=cmap)
@@ -126,7 +126,7 @@ def plot_images(images, rows, cols, ordering=S_ROWS, cmap=S_GRAY):
         elif ordering==S_COLS:
             idx += cols
             if idx > rows*cols:
-                idx = (idx+1) % cols
+                idx = (idx+1) % cols + 1
         else:
             raise ValueError(f"'ordering' should be '{S_ROWS}' or '{S_COLS}'")
 
