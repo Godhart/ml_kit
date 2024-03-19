@@ -305,6 +305,8 @@ def train_routine(
                         ),
                     )
                     for load_path in S_REGULAR, S_BEST:
+                        if not thd_tmp.can_load(load_path, dont_load_model=True):
+                            continue
                         thd_tmp.load(load_path, dont_load_model=True)
                         if thd_tmp.mhd.context.epoch >= train_vars.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]) \
                         or thd.is_enough(train_vars.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET])):
