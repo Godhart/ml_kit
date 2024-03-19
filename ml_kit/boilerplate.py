@@ -24,7 +24,8 @@ from tensorflow.keras import utils
 
 
 def get_tab_run_default(tab_id, model_name, model_data, hp_name, hp):
-    return tab_id, f"{model_name}--{hp_name}"
+    # return tab group id, tab name, run name
+    return tab_id, f"{model_name}--{hp_name}", f"{model_name}--{hp_name}"
 
 
 def make_tabs(models, hyper_params_sets, get_tab_run_call=get_tab_run_default,):
@@ -32,7 +33,7 @@ def make_tabs(models, hyper_params_sets, get_tab_run_call=get_tab_run_default,):
     for model_name, model_data in models.items():
         for hp_name, hp in hyper_params_sets.items():
             for tab_id in hp['tabs']:
-                tab_group, tab_i = get_tab_run_call(tab_id, model_name, model_data, hp_name, hp)
+                tab_group, tab_i, _ = get_tab_run_call(tab_id, model_name, model_data, hp_name, hp)
                 if tab_group not in tabs_dict:
                     tabs_dict[tab_group] = {}
                 widget = tabs_dict[tab_group][tab_i] = widgets.Output()
@@ -244,7 +245,7 @@ def train_routine(
 
                 model_data = models[model_name]
 
-                _, run_name = get_tab_run_call(None, model_name, model_data, hp_name, hp)
+                _, _, run_name = get_tab_run_call(None, model_name, model_data, hp_name, hp)
                 print(f"Running {run_name}")
 
                 model_vars = {**copy.deepcopy(model_data.get('vars', {})), **copy.deepcopy(hp.get('model_vars', {}))}
@@ -380,7 +381,7 @@ def train_routine(
                     clear_output()
 
                 for tab_id in hp['tabs']:
-                    tab_group, tab_name = get_tab_run_call(tab_id, model_name, model_data, hp_name, hp)
+                    tab_group, tab_name, _ = get_tab_run_call(tab_id, model_name, model_data, hp_name, hp)
                     with tabs_dict[tab_group][tab_name]:
                         clear_output()
                         print_to_tab_call(
