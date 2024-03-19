@@ -733,6 +733,9 @@ bp.train_routine(
     print_to_tab_call=print_to_tab,
 )
 
-score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: score[x]['score'])
+score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: [
+    score[x]['mse'] + ENV[ENV__TRAIN__DEFAULT_EPOCHS],
+    score[x]['mse'] + score[x]['best_epoch']
+    ][score[x]['success']=="Yes"])
 
 print_table(*score_table)
