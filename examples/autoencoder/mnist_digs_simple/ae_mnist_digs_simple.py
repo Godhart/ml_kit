@@ -571,8 +571,9 @@ if True:
 from IPython.display import display
 
 def get_tab_run(tab_id, model_name, model_data, hp_name, hp):
-    if model_name[:3] == "dns":
-        tab_suffix, model_name = model_name.split("-", 1)
+    run_name = f"{model_name}--{hp_name}"
+    if run_name[:3] == "dns":
+        tab_suffix, tab_name = run_name.split("-", 1)
         if tab_id is not None:
             if "-" not in tab_id:
                 tab_id += "-" + tab_suffix
@@ -580,7 +581,8 @@ def get_tab_run(tab_id, model_name, model_data, hp_name, hp):
         if tab_id is not None:
             if "-" not in tab_id:
                 tab_id += "-cnn"
-    return tab_id, f"{model_name}--{hp_name}"
+        tab_name = run_name
+    return tab_id, tab_name, run_name
 
 tabs_dict, tabs_objs = bp.make_tabs(
     models,
@@ -622,7 +624,7 @@ def prepare(    model_name,
     original_tabs = [*hp['tabs']]
     hp['tabs'] = []
     for v in original_tabs:
-        tab_id, _ = get_tab_run(v, model_name, model_data, hp_name, hp)
+        tab_id, _, _ = get_tab_run(v, model_name, model_data, hp_name, hp)
         hp['tabs'].append(tab_id)
 
     latent_ref = model_vars.get('latent', None)
