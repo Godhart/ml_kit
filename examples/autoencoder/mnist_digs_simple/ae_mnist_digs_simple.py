@@ -179,6 +179,7 @@ if STANDALONE:
     from ml_kit.trainer_common import *
     from ml_kit.plots import *
     import ml_kit.boilerplate as bp
+    from ml_kit.reporting import *
 
 # ---------------------------------------------------------------------------- #
 
@@ -655,6 +656,7 @@ def on_model_update(thd):
     EPOCH_CALLBACK_DATA['latent'] = thd.mhd.models['encoder_model']
     EPOCH_CALLBACK_DATA['save_path'] = Path(thd.data_path) / "latent"
 
+score = {}
 
 def print_to_tab(
     model_name,
@@ -673,6 +675,15 @@ def print_to_tab(
     for tab_id in hp['tabs']:
         if 'learn' in tab_id:
             tab_print_map[tab_id] = bp.print_to_tab_learn
+
+    mse = mhd.context.get_metric_value(S_MSE)
+    success = mse < ENV[ENV__TRAIN__DEFAULT_TARGET][S_MSE]
+    score[run_name] = to_dict(
+        best_epoch = best_metrics['epoch'],
+        mse = mse,
+        score = best_metrics['epoch'] + mse,
+        success = ["No", "Yes"][success],
+    )
 
     print_call = tab_print_map.get(tab_group, None)
     if print_call is None:
@@ -710,6 +721,7 @@ def print_to_tab(
         best_metrics,
     )
 
+score.clear()
 
 bp.train_routine(
     models,
@@ -720,3 +732,7 @@ bp.train_routine(
     get_tab_run_call=get_tab_run,
     print_to_tab_call=print_to_tab,
 )
+
+score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: score[x]['score'])
+
+print_table(*score_table)
