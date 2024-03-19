@@ -232,6 +232,7 @@ def train_routine(
     trainer_create_call=trainer_create_default,
     train_display_call=train_display_default,
     print_to_tab_call=print_to_tab_default,
+    use_model_hp=None,
     ):
     dummy_output = widgets.Output()
 
@@ -246,6 +247,11 @@ def train_routine(
                 model_data = models[model_name]
 
                 _, _, run_name = get_tab_run_call(None, model_name, model_data, hp_name, hp)
+
+                if use_model_hp is not None:
+                    if not use_model_hp(model_name, model_data, hp_name, hp, run_name):
+                        return
+
                 print(f"Running {run_name}")
 
                 model_vars = {**copy.deepcopy(model_data.get('vars', {})), **copy.deepcopy(hp.get('model_vars', {}))}
