@@ -21,7 +21,7 @@ class Env:
         if self.is_locked(key):
             raise ValueError(f"Data with key '{key}' is locked!")
         del self._data[key]
-        
+
     def __cmp__(self, dict_):
         return self.__cmp__(self._data, dict_)
 
@@ -30,18 +30,18 @@ class Env:
 
     def __iter__(self):
         return iter(self._data)
-        
+
     def lock(self, key, state):
         self._locked[key] = state
-        
+
     def is_locked(self, key):
         return self._locked.get(key, self._fallback_lock) is True
-                
+
     def set(self, key, value):
         if self.is_locked(key):
             raise ValueError(f"Data with key '{key}' is locked!")
         self._data[key] = value
-        
+
     def get(self, key, fallback='_no_fallback_'):
         if self._autolock and self._fallback_lock is None:
             self._fallback_lock = True  # As soon as any field is read - lock data from changes
@@ -52,21 +52,21 @@ class Env:
                 return fallback
         else:
             return self._data[key]
-        
+
     def keys(self):
         return self._data.keys()
-    
+
     def items(self):
         return self._data.items()
 
     def set_dict(self, data):
         for k,v in data.items():
             self.set(k, v)
-            
+
     def lock_dict(self, data):
         for k, v in data.items():
             self.lock(k, not v is False)
-            
+
     def as_dict(self):
         return {**self._data}
 
