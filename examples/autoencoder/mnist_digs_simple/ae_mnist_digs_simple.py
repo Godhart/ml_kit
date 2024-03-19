@@ -676,7 +676,7 @@ def print_to_tab(
         if 'learn' in tab_id:
             tab_print_map[tab_id] = bp.print_to_tab_learn
 
-    mse = mhd.context.get_metric_value('val_'+S_MSE)
+    mse = mhd.context.get_metric_value(S_MSE)
     success = mse < ENV[ENV__TRAIN__DEFAULT_TARGET][S_MSE]
     score[run_name] = to_dict(
         best_epoch = best_metrics['epoch'],
