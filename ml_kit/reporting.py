@@ -46,7 +46,7 @@ def pick_random_pairs(paired_arrays, amount):
     return result
 
     # NOTE: use case:
-    # imgs = [img.squeeze() for img pick_random_pairs([x_test, y_pred], 5)]
+    # imgs = [img.squeeze() for img in pick_random_pairs([x_test, y_pred], 5)]
     # plt.figure(figsize=(14, 7))
     # plot_images(imgs, 2, 5, ordering=S_COLS)
     # plt.show()
