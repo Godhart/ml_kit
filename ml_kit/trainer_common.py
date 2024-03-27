@@ -67,6 +67,21 @@ S_ACCURACY = "accuracy"
 S_MAE = "mae"
 S_MSE = "mse"
 S_LOSS = "loss"
+S_CCE = "categorical_crossentropy"
+S_SCCE = "sparse_categorical_crossentropy"
+S_SCA = "sparse_categorical_accuracy"
+
+S_LINEAR    = "linear"
+S_RELU      = "relu"
+S_ELU       = "elu"
+S_TANH      = "tanh"
+S_SIGMOID   = "sigmoid"
+S_SOFTSIGN  = "softsign"
+S_SOFTPLUS  = "softplus"
+S_SOFTMAX   = "softmax"
+S_MISH      = "mish"
+
+S_SAME      = "same"
 
 S_CM = "cm"
 S_REGRESSION = "regression"
@@ -81,6 +96,7 @@ S_LE = "le"
 
 METRICS = {
     S_ACCURACY  : {S_COMPARE: S_GE},
+    S_SCA       : {S_COMPARE: S_GE},
     S_MAE       : {S_COMPARE: S_LE},
     S_MSE       : {S_COMPARE: S_LE},
 }
