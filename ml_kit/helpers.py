@@ -40,6 +40,16 @@ S_IPARENTS = 'iparents'
 S_ICHILDREN = 'ichildren'
 S_NAMED_LAYERS = 'named_layers'
 
+
+def mult(*values):
+    if len(values) == 1 and isinstance(values, (list, tuple)):
+        values = values[0]
+    result = 1
+    for v in values:
+        result *= v
+    return result
+
+
 class timex:
     """
     Контекстный менеджер для измерения времени операций
