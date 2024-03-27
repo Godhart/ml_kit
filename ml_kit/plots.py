@@ -116,9 +116,15 @@ def plot_graph_to_multiple_rows(
 
 def plot_images(images, rows, cols, ordering=S_ROWS, cmap=S_GRAY):
     idx = 1
+    i = -1
     for img in images:
+        i += 1
         ax = plt.subplot(rows, cols, idx)
-        plt.imshow(img, cmap=cmap)
+        if isinstance(cmap, list):
+            img_cmap = cmap[i]
+        else:
+            img_cmap = cmap
+        plt.imshow(img, cmap=img_cmap)
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
         if ordering==S_ROWS:
