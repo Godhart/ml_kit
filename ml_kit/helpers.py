@@ -258,14 +258,20 @@ def _create_layers_chain(parent, *layers, **variables):
     layers_chain = []
     named = {}
     for layer in layers:
-        if parent is None:
-            parent = layer_create(layer, **variables)
+        if '_parent_' in layer[2]:
+            layer_parent = subst_vars([layer[2]['_parent_']], {**variables, **named}, recurse=True)[0]
         else:
-            parent = layer_create(layer, **variables)(parent)
+            layer_parent = parent
+        if layer_parent is None:
+            layer_instance = layer_create(layer, **{**variables, **named})
+        else:
+            layer_instance = layer_create(layer, **{**variables, **named})(layer_parent)
         if '_name_' in layer[2]:
-            named[layer[2]['_name_']] = parent
-        layers_chain.append(parent)
-    return layers_chain, named
+            named[layer[2]['_name_']] = layer_instance
+        layers_chain.append(layer_instance)
+        if layer[2].get('_spinoff_', False) is not True:
+            parent = layer_instance
+    return layers_chain, named, parent
 
 def _lookup_vars(value, result:list[str], lookup_vars:dict):
     if isinstance(value, (list, tuple)):
@@ -313,8 +319,8 @@ def model_create(model_class, templates, **variables):
                 if '_name_' in layer[2]:
                     named_layers[layer[2]['_name_']] = layer_instance
         else:
-            layers_chain, named_layers = _create_layers_chain(None, *templates, **variables)
-            model = model_class([layers_chain[0]], layers_chain[-1])
+            layers_chain, named_layers, last_in_chain = _create_layers_chain(None, *templates, **{**variables, **named_layers})
+            model = model_class([layers_chain[0]], last_in_chain)
 
     elif isinstance(templates, dict):
         branches = {}
@@ -457,14 +463,14 @@ def model_create(model_class, templates, **variables):
                     parents = None
                 else:
                     parents = branches[v[S_PARENTS][0]][S_CHAIN][-1]
-                branches[k][S_CHAIN], named = _create_layers_chain(
+                branches[k][S_CHAIN], named, last_in_chain = _create_layers_chain(
                     parents,
                     *v[S_LAYERS],
-                    **branch_vars)
+                    **{**branch_vars, **named_layers})
                 for nk, nv in named.items():
                     named_layers[k+"/"+nk] = nv
 
-                created_branches[k] = branches[k][S_CHAIN][-1]
+                created_branches[k] = last_in_chain
 
             prev_incomplete = incomplete_branches
             incomplete_branches = _incomplete_branches(branches)
