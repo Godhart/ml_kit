@@ -196,8 +196,6 @@ if STANDALONE:
 
 ## Глобальные параметры
 
-# Списки включения / исключения наборов гиперпараметров
-
 RELOAD_DATA             = None  # Если True зараннее введённые параметры воссаздаются каждый раз с нуля
                                 # (классы, статистика по классам и т.п.)
 TARGET_CLASSES_COUNT    = 5     # Целевое значение до которого уменьшать кол-во классов (если их больше)
@@ -206,7 +204,13 @@ TARGET_CLASSES_BALANCE  = True  # Если True то объединение кл
 TRAIN_DATA_LIMIT        = None  # Предел используемого числа данных для обучения. None для использования всех данных
 TEST_DATA_LIMIT         = None  # Предел используемого числа данных для контроля обучения. None для использования всех данных
 
+MAX_HP_CASES            = 1000  # Ограниечиние вариантов гиперпараметров
+
+SCORE_FACTOR            = -1    # 1 если целевая метрика лучше чем ниже значение, -1 если целевая метрика лучше чем выше значение
+
 SHOW_PLOTS              = True  # True для отображения графики
+
+# Списки включения / исключения наборов гиперпараметров
 
 TRAIN_INCLUDE = None  # Включать всё
 TRAIN_EXCLUDE = None  # Ничего не исключать
@@ -241,13 +245,11 @@ ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_11_lite_1a"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-3)]
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = S_SCCE
 ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_SCA]
-ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 128
+ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 50
 ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 7
-ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_SCA: 1.0} # Критерий немного жёстче целевого, т.к. на тестовой выборке ошибка может оказаться чуть выше
+ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_SCA: 1.0} # Макс. критерий чтобы модели прошли все эпохи обучения
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 10
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
-
-SCORE_FACTOR = -1   # 1 если целевая метрика лучше чем ниже значение, -1 если целевая метрика лучше чем выше значение
 
 # ---------------------------------------------------------------------------- #
 
@@ -258,6 +260,11 @@ y_train = np.array(train_segments[:TRAIN_DATA_LIMIT])
 
 x_test  = np.array(val_images[:TEST_DATA_LIMIT])
 y_test  = np.array(val_segments[:TEST_DATA_LIMIT])
+
+print(x_train.shape)
+print(y_train.shape)
+print(x_test.shape)
+print(y_test.shape)
 
 # ---------------------------------------------------------------------------- #
 
@@ -380,11 +387,11 @@ if TARGET_CLASSES_BALANCE:
     classes_map[TARGET_CLASSES_COUNT-1] = []
     pix_count_alt[TARGET_CLASSES_COUNT-1] = 0
 
-    balanced_spread_map = [[]]*(TARGET_CLASSES_COUNT)
+    balanced_spread_map = [[] for i in range((TARGET_CLASSES_COUNT))]
     balanced_spread_count = np.array(pix_count_alt)
 
     for i in range(TARGET_CLASSES_COUNT-1, len(sorted_classes)):
-        idx = np.argmin(balanced_spread_count)
+        idx = int(np.argmin(balanced_spread_count))
         balanced_spread_map[idx].append(original_classes[sorted_classes[i]])
         balanced_spread_count[idx] += pix_count[sorted_classes[i]]
 
@@ -444,25 +451,33 @@ def unet_conv_down(idx, conv_count, last=False):
 
     result = []
 
-    name = {}
     for i in range(conv_count):
         if i == conv_count-1:
-            name = to_dict(_name_=f"level{idx}_cdn_out")
+            name = to_dict(
+                 name =f"level{idx}_cdn_out",   #  name  is for display    purposes
+                _name_=f"level{idx}_cdn_out",   # _name_ is for connection purposes
+            )
+        else:
+            name = to_dict(
+                 name =f"level{idx}_cdn{i+1}_act",    #  name  is for display    purposes
+            )
 
         result += [
             layer_template(Conv2D,          f"$level{idx}_layers",      f"$level{idx}_kernel", padding=S_SAME, name=f"level{idx}_cdn{i+1}"),
-            layer_template(BatchNormalization),
+            layer_template(BatchNormalization, name =f"level{idx}_cdn{i+1}_bn"),
             layer_template(Activation,      f"$level{idx}_activation", **name),
         ]
 
     if not last:
         result += [
-            layer_template(Conv2D,          f"$level{idx}_layers", (1, 1), padding='same', _name_=f"level{idx}_cdn_out_mask", _spinoff_=True),
-            layer_template(MaxPooling2D, ),
+            layer_template(Conv2D,          f"$level{idx}_layers", (1, 1), padding='same',
+                                             name =f"level{idx}_cdn_out_mask",
+                                            _name_=f"level{idx}_cdn_out_mask", _spinoff_=True),
+            layer_template(MaxPooling2D,     name =f"level{idx}_reduce"),
         ]
     else:
         result += [
-            layer_template(MaxPooling2D,    _name_=f"for_pretrained_weight", _spinoff_=True),
+            # layer_template(MaxPooling2D,    _name_=f"for_pretrained_weight", _spinoff_=True),
         ]
 
     return result
@@ -470,16 +485,19 @@ def unet_conv_down(idx, conv_count, last=False):
 def unet_conv_up(idx, conv_count):
 
     result = [
-        layer_template(Conv2DTranspose, f"$level{idx}_layers",      (2, 2), strides=(2, 2), padding=S_SAME),
-        layer_template(BatchNormalization),
-        layer_template(Activation,      f"$level{idx}_activation",  _name_=f"level{idx}_cup_in"),
+        layer_template(Conv2DTranspose, f"$level{idx}_layers",      (2, 2), strides=(2, 2), padding=S_SAME, name =f"level{idx}_upscale"),
+        layer_template(BatchNormalization, name =f"level{idx}_upscale_bn"),
+        layer_template(Activation,      f"$level{idx}_activation",
+                                         name =f"level{idx}_cup_in",
+                                        _name_=f"level{idx}_cup_in",
+        ),
         layer_template(concatenate,     [f"$level{idx}_cup_in",     f"$level{idx}_cdn_out", f"$level{idx}_cdn_out_mask"], _parent_=None),
     ]
     for i in range(conv_count):
         result += [
             layer_template(Conv2D,      f"$level{idx}_layers",      f"$level{idx}_kernel", padding=S_SAME, name=f"level{idx}_cup{i+1}"),
-            layer_template(BatchNormalization),
-            layer_template(Activation,  f"$level{idx}_activation"),
+            layer_template(BatchNormalization,                      name=f"level{idx}_cup{i+1}_bn"),
+            layer_template(Activation,  f"$level{idx}_activation",  name=f"level{idx}_cup{i+1}_act"),
         ]
 
     return result
@@ -487,8 +505,8 @@ def unet_conv_up(idx, conv_count):
 
 
 input_shape  = x_train.shape[1:]
-model_input  = [layer_template(Input,   input_shape),]
-model_output = [layer_template(Conv2D, "$classes_count", "$output_kernel", activation=S_SOFTMAX, padding=S_SAME),]
+model_input  = [layer_template(Input,   input_shape, name=f"model_input"),]
+model_output = [layer_template(Conv2D, "$classes_count", "$output_kernel", activation=S_SOFTMAX, padding=S_SAME, name=f"model_output"),]
 
 handmade_models = to_dict(
     unet = to_dict(
@@ -501,13 +519,14 @@ handmade_models = to_dict(
         template = [
                 *model_input,
                 *unet_conv_down(1,2),
-                *unet_conv_down(2,2),
-                *unet_conv_down(3,3),
-                *unet_conv_down(4,3),
-                *unet_conv_down(5,3, last=True),
-                *unet_conv_up(4,2),
-                *unet_conv_up(3,2),
-                *unet_conv_up(2,2),
+                *unet_conv_down(2,2, last=True),
+                # NOTE: full U-Net model uses A LOT of RAM, reduce it to try something at least
+                # *unet_conv_down(3,3),
+                # *unet_conv_down(4,3),
+                # *unet_conv_down(5,3, last=True),
+                # *unet_conv_up(4,2),
+                # *unet_conv_up(3,2),
+                # *unet_conv_up(2,2),
                 *unet_conv_up(1,2),
                 *model_output,
         ],
@@ -579,7 +598,7 @@ hp_template = to_dict(
 
 hyper_params_sets = {}
 
-xx = 1000
+xx = MAX_HP_CASES
 for hp_layers_mult in (1, 0.5):
     for hp_act in (S_RELU, S_ELU, S_LINEAR, ):
         for hp_kernel in ((3,3), (5, 5) ):
@@ -604,6 +623,8 @@ for hp_layers_mult in (1, 0.5):
 y_train = np.array(rgb_to_sparse_classes(train_segments[:TRAIN_DATA_LIMIT], classes_map))
 y_test  = np.array(rgb_to_sparse_classes(val_segments[:TEST_DATA_LIMIT], classes_map))
 
+print(y_train.shape)
+print(y_test.shape)
 
 # ---------------------------------------------------------------------------- #
 
@@ -647,6 +668,8 @@ tabs_objs.keys()
 ###
 # Подготовка данных, обучение, вывод результатов
 
+score = {}
+
 def prepare(    model_name,
     model_data,
     hp_name,
@@ -666,17 +689,14 @@ def prepare(    model_name,
         x_train = x_train,
         y_train = y_train,
 
-        x_val   = 0.1,
-        y_val   = None,
+        x_val   = x_test,
+        y_val   = y_test,
 
         x_test  = x_test,
         y_test  = y_test,
     )
 
     return data_provider
-
-
-score = {}
 
 def plot_XvsY(
     model_name,
@@ -701,9 +721,14 @@ def plot_XvsY(
 
     SAMPLES_COUNT = 5
     imgs = [img.squeeze() for img in pick_random_pairs([x_test, y_test, y_pred], SAMPLES_COUNT)]
+    # Convert y_pred samples to classes
+    for i in range(2,len(imgs),3):
+        pred_raw_data = imgs[i]
+        pred_data = np.argmax(pred_raw_data, axis=-1)
+        imgs[i] = pred_data
     cmaps = [None, S_GRAY, S_GRAY] * SAMPLES_COUNT
     plt.figure(figsize=(14, 7))
-    plot_images(imgs, 3, SAMPLES_COUNT, ordering=S_COLS)
+    plot_images(imgs, 3, SAMPLES_COUNT, ordering=S_COLS, cmap=cmaps)
     plt.show()
 
 def print_to_tab(
@@ -744,7 +769,7 @@ def print_to_tab(
             best_epoch = best_metrics['epoch'],
             test_metric = test_metric,
             train_metric = train_metric,
-            score = SCORE_FACTOR * (best_metrics['epoch'] + train_metric),
+            score = SCORE_FACTOR * (train_metric),  # TODO: test_metric
             success = ["No", "Yes"][success],
         )
     else:
@@ -800,9 +825,6 @@ bp.train_routine(
     print_to_tab_call=print_to_tab,
 )
 
-score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: [
-    SCORE_FACTOR * (score[x]['test_metric'] + ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
-    SCORE_FACTOR * (score[x]['test_metric'] + score[x]['best_epoch'])
-    ][score[x]['success']=="Yes"])
+score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: score[x]['test_metric'])
 
 print_table(*score_table)
