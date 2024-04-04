@@ -296,7 +296,7 @@ def _get_iparents(templates, layers:list[str]):
     return result
 
 
-def model_create(model_class, templates, **variables):
+def model_create(model_class, templates, model_kwargs=None, **variables):
     """
     Помогатор для создания модели
     """
@@ -307,6 +307,7 @@ def model_create(model_class, templates, **variables):
     outputs = None
     model = None
     named_layers = {}
+    model_kwargs = model_kwargs or {}
 
     if isinstance(templates, (list, tuple)):
         if len(templates) < 2:
@@ -373,9 +374,6 @@ def model_create(model_class, templates, **variables):
 
         if len(outputs) == 0:
             raise ValueError("Output branch is not set! Specify strictly one branch as output (set 'output' field to True)")
-
-        if len(outputs) > 1:
-            raise ValueError(f"Multiple output branches were set! Specify strictly one branch as output (branches are {outputs})")
 
         # Chain branches (find all children) and do DRC
 
@@ -480,7 +478,11 @@ def model_create(model_class, templates, **variables):
                     f"Those branches can't be created (check for circular references): {incomplete_branches}!"
                     f" {[line_break + k + ': [' + ', '.join([kk for kk in branches[k][S_PARENTS]  if S_CHAIN not in branches[k][S_PARENTS]] + [kk for kk in branches[k][S_IPARENTS] if S_CHAIN not in branches[k][S_IPARENTS]]) for k in incomplete_branches]}]"
                     )
-        model = model_class([branches[k][S_CHAIN][0] for k in inputs], branches[outputs[0]][S_CHAIN][-1])
+        model = model_class(
+            [branches[k][S_CHAIN][0]  for k in inputs],
+            [branches[k][S_CHAIN][-1] for k in outputs],
+            **model_kwargs
+        )
 
     return {S_MODEL: model, S_INPUTS: inputs, S_NAMED_LAYERS: named_layers}
 
