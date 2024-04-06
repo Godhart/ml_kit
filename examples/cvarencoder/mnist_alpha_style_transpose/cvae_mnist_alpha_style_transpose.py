@@ -125,8 +125,13 @@ from tensorflow.keras.models import Model
 # Оптимизатор
 from tensorflow.keras.optimizers import Adam
 
+# Создание собственных слоёв
+from tensorflow.keras import layers
+
 # Функция среднеквадратической ошибки для расчетов вручную
 from sklearn.metrics import mean_squared_error
+
+from functools import partial
 
 # ---------------------------------------------------------------------------- #
 
@@ -197,13 +202,75 @@ ENV[ENV__JUPYTER] = False
 # Перегрузка окружения под текущую задачу
 ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_14_pro_1a"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-4)] # TODO: change learning rate ?
-ENV[ENV__TRAIN__DEFAULT_LOSS]            = S_MSE            # TODO: None
-ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_MSE]
+ENV[ENV__TRAIN__DEFAULT_LOSS]            = None
+ENV[ENV__TRAIN__DEFAULT_METRICS]         = []
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 128
 ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 2
-ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_MSE: 0.0068}  # TODO: no target
+ENV[ENV__TRAIN__DEFAULT_TARGET]          = {}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 5
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
+ENV[ENV__MODEL__CREATE_REPEAT_NAME]      = True
+
+
+# ---------------------------------------------------------------------------- #
+
+# Доподготовка данных
+
+num_classes = np.max(y_train)
+
+y_train_ohe = keras.utils.to_categorical(y_train, num_classes)
+y_test_ohe  = keras.utils.to_categorical(y_test,  num_classes)
+
+# ---------------------------------------------------------------------------- #
+
+###
+# Вспомогательные функции
+
+# Создадим функцию - генератор случайных чисел с заданными параметрами
+# (используется в модели hm1)
+def noise_gen(args, latent_dim):
+    z_mean, z_log_var = args
+
+    # Генерируем тензор из нормальных случайных  чисел с параметрами (0,1)
+    N = K.random_normal(shape=(K.shape(z_mean)[0], latent_dim), mean=0., stddev=1.0)
+
+    # Вернем тензор случайных чисел с заданной дисперсией и мат.ожиданием
+    return K.exp(z_log_var / 2) * N + z_mean
+
+
+def cvaec_loss(mhd):
+    input_img   = mhd.sub_models['enc'].named_layers['enc_cnn/enc_cnn_input']
+    z_mean      = mhd.sub_models['enc'].named_layers['latent/z_log_var']
+    z_log_var   = mhd.sub_models['enc'].named_layers['latent/z_mean']
+    outputs     = mhd.sub_models['dec'].model
+
+    reconstruction_loss = keras.losses.MSE(input_img, outputs)      # Рассчитаем ошибку восстановления изображения - лоссы MSE
+    reconstruction_loss *= mult(x_train.shape[1:])                  # Уберем нормировку MSE
+    kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)   # Рассчитаем лоссы KL
+    kl_loss = -0.5* K.sum(kl_loss, axis=-1)                         #
+    result = K.mean(reconstruction_loss) +  K.mean(kl_loss)         # Суммируем лоссы - здесь можно вводить веса
+    return result
+
+
+def dummy_loss(mhd):
+    return []
+
+
+# Созданим класс для генерации случайных чисел Sampling
+# (используется в модели hm2)
+class Sampling(layers.Layer):
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
+
+    def call(self, inputs):               # На входе мат ожидание и дисперсия
+        z_mean, z_log_var = inputs        # Разделим вход на 2 параметра
+        batch = tf.shape(z_mean)[0]       # Найдем размер батча
+        dim = tf.shape(z_mean)[1]         # Найдем размер элемента
+
+        # Создадим тензор из нормальных случайных чисел параметрами (0,1)
+        epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
+
+        #Создадим и вернем тензор в нужныммат.ожиданием и дисперсией
+        return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
 # ---------------------------------------------------------------------------- #
 
@@ -212,70 +279,224 @@ ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 ###
 # Используемые модели
 
+
 input_shape = x_train.shape[1:]
 
-model_items = to_dict(
-    cnn_input    = [],
-    cnn1_encoder = [
-                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-                    layer_template(MaxPooling2D, ),
-    ],
-    cnn1_decoder = [
-                    layer_template(Conv2DTranspose, 32, (2, 2), strides=(2, 2), padding='same', activation='$ae_activation'),
-                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-    ],
-    cnn2_encoder = [
-                    layer_template(Conv2D,  64, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-                    layer_template(Conv2D,  64, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-                    layer_template(MaxPooling2D, ),
-    ],
-    cnn2_decoder = [
-                    layer_template(Conv2DTranspose, 32, (2, 2), strides=(2, 2), padding='same', activation='$ae_activation'),
-                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-                    layer_template(Conv2D,  32, (3, 3), padding='same', activation='$ae_activation'),
-                    layer_template(BatchNormalization, ),
-    ],
-    cnn_output = [
-                    layer_template(Conv2D,  input_shape[-1], (3, 3), activation='sigmoid', padding='same'),
+
+def enc_cnn_layer(prefix, idx, neurons, kernel_size, strides):
+    return [
+        layer_template(Conv2D,  neurons, kernel_size=kernel_size, strides=strides, padding='same', name=f"{prefix}_cnn{idx}",),
+        layer_template(BatchNormalization, name=f"{prefix}_ban{idx}",),
+        layer_template("$cnn_activation", name=f"{prefix}_act{idx}",),
     ]
+
+
+def dec_cnn_layer(prefix, idx, neurons, kernel_size, strides):
+    return [
+        layer_template(Conv2DTranspose,  neurons, kernel_size=kernel_size, strides=strides, padding='same', name=f"{prefix}_cnn{idx}",),
+        layer_template(BatchNormalization, name=f"{prefix}_ban{idx}",),
+        layer_template("$cnn_activation", name=f"{prefix}_act{idx}",),
+    ]
+
+
+model_items = to_dict(
+    encoder_classes = to_dict(
+        input = True,
+        layers = [
+            layer_template(Input,   num_classes, name='input_classes'),
+        ],
+    ),
+    encoder_concat = to_dict(
+        parents = ["encoder_cnn", "encoder_classes"],
+        layers = [
+            layer_template(concatenate, ["$encoder_cnn", "$encoder_classes",], _parent_=None,),
+        ],
+    ),
+    latent_lambda = to_dict(
+        parents = ["encoder_concat"],
+        output = True,
+        layers = [
+            layer_template(Dense, "$ldense_dim", activation='linear',   name='latent_input', ),
+            layer_template(Dense, "$latent_dim", _name_="z_mean"    ,   _output_=0),        # TODO: Activation?
+            layer_template(Dense, "$latent_dim", _name_="z_log_var" ,   _output_=1),        # TODO: Activation?
+            layer_template(
+                Lambda, "$noise_gen", output_shape=("$latent_dim",) ,   name='noise_gen',
+                _parent_=["$z_mean", "$z_log_var"],                     _output_=2),
+        ],
+    ),
+    latent_sampling = to_dict(
+        parents = ["encoder_concat"],
+        output = True,
+        layers = [
+            layer_template(Dense, "$ldense_dim", activation='linear',   name='latent_input', ),
+            layer_template(Dense, "$latent_dim", _name_="z_mean"    ,   _output_=0),        # TODO: Activation?
+            layer_template(Dense, "$latent_dim", _name_="z_log_var" ,   _output_=1),        # TODO: Activation?
+            layer_template(Sampling, name="noise_gen",
+                _parent_=["$z_mean", "$z_log_var"],                     _output_=2),
+        ],
+    ),
+    decoder_input = to_dict(
+        input = True,
+        layers = [
+            layer_template(Input,  shape=("$latent_dim", ), _name_="dec_latent_input",  _input_ = 0),
+            layer_template(Input,  shape=(num_classes, ),   _name_="dec_classes_input", _input_ = 1),
+            layer_template(concatenate, ["$dec_latent_input", "$dec_classes_input",],   _parent_=None,),
+        ],
+    ),
 )
 
-handmade_models = to_dict(
 
-    cnn2 = to_dict(
+handmade_models_parts = to_dict(
+
+    ##############
+    # Encoder #1 #
+    ##############
+    hm1_enc = to_dict(
         model_class = Model,
+        loss = dummy_loss,
         vars = to_dict(
-            ae_activation = 'relu'
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 2,
+            latent_dim  = 2,
+            kernel_size = 3,
+            noise_gen   = partial(noise_gen, latent_dim=2),
+            cnn_activation = LeakyReLU,
         ),
         thd_kwargs = to_dict(
         ),
         template = to_dict(
-            encoder = to_dict(
+            encoder_cnn = to_dict(
                 input  = True,
                 layers = [
-                    layer_template(Input,   input_shape),
-                    *model_items['cnn1_encoder'],
-                    *model_items['cnn2_encoder'],
-                ]
-            ),
-            decoder = to_dict(
-                parents = 'encoder',
-                output = True,
-                layers = [
-                    *model_items['cnn2_decoder'],
-                    *model_items['cnn1_decoder'],
-                    *model_items['cnn_output'],
+                    layer_template(Input,   input_shape, name="enc_cnn_input"),
+                    *enc_cnn_layer("enc_l", 1, 32, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_l", 2, 64, "$kernel_size", 2),
+                    *enc_cnn_layer("enc_l", 3, 64, "$kernel_size", 2),
+                    *enc_cnn_layer("enc_l", 4, 64, "$kernel_size", 1),
+                    layer_template(Flatten, name="enc_cnn_flat"),
                 ],
             ),
+            encoder_classes = {**model_items['encoder_classes']},
+            encoder_concat  = {**model_items['encoder_concat']},
+            latent          = {**model_items['latent_lambda']},
+        ),
+    ),
+
+    ##############
+    # Decoder #1 #
+    ##############
+    hm1_dec = to_dict(
+        model_class = Model,
+        loss = dummy_loss,
+        vars = to_dict(
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 2,
+            latent_dim  = 2,
+            kernel_size = 3,
+            noise_gen   = partial(noise_gen, latent_dim=2),
+            cnn_activation = LeakyReLU,
+        ),
+        thd_kwargs = to_dict(
+        ),
+        template = to_dict(
+            decoder_input = {**model_items['decoder_input']},
+            encoder_cnn = to_dict(
+                output = True,
+                parent = "decoder_input",
+                layers = [
+                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
+                    *dec_cnn_layer("dec_l", 3, 64,      "$kernel_size", 1),
+                    *dec_cnn_layer("dec_l", 2, 64,      "$kernel_size", 2),
+                    *dec_cnn_layer("dec_l", 1, 32,      "$kernel_size", 2),
+                    layer_template(Conv2DTranspose, 1,  "$kernel_size", padding="same", activation="sigmoid", name="output"),
+                ],
+            ),
+        ),
+    ),
+
+    ##############
+    # Encoder #2 #
+    ##############
+
+    hm2_enc = to_dict(
+        model_class = Model,
+        loss = dummy_loss,
+        vars = to_dict(
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 16,
+            latent_dim  = 2,
+            kernel_size = 3,
+            cnn_act     = "relu",
+        ),
+        thd_kwargs = to_dict(
+        ),
+        template = to_dict(
+            encoder_cnn = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(Input,   input_shape, name="enc_cnn_input"),
+                    layer_template(Conv2D,  32, "$kernel_size", strides=2, activation="$cnn_act", padding="same", name="enc_l1_cnn"),
+                    layer_template(Conv2D,  64, "$kernel_size", strides=2, activation="$cnn_act", padding="same", name="enc_l2_cnn"),
+                    layer_template(Flatten, name="enc_cnn_flat"),
+                ],
+            ),
+            encoder_classes = {**model_items['encoder_classes']},
+            encoder_concat  = {**model_items['encoder_concat']},
+            latent          = {**model_items['latent_sampling']},
+        ),
+    ),
+
+    ##############
+    # Decoder #2 #
+    ##############
+    hm2_dec = to_dict(
+        model_class = Model,
+        loss = dummy_loss,
+        vars = to_dict(
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 16,
+            latent_dim  = 2,
+            kernel_size = 3,
+        ),
+        thd_kwargs = to_dict(
+        ),
+        template = to_dict(
+            decoder_input = {**model_items['decoder_input']},
+            encoder_cnn = to_dict(
+                output = True,
+                parent = "decoder_input",
+                layers = [
+                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
+                    layer_template(Conv2DTranspose,64,  "$kernel_size", strides=2, padding="same", activation="$cnn_act",   name="dec_l2_cnn"),
+                    layer_template(Conv2DTranspose,32,  "$kernel_size", strides=2, padding="same", activation="$cnn_act",   name="dec_l1_cnn"),
+                    layer_template(Conv2DTranspose, 1,  "$kernel_size",            padding="same", activation="sigmoid",    name="output"),
+                ],
+            ),
+        ),
+    ),
+
+)
+
+
+handmade_models = to_dict(
+
+    hm1_full = to_dict(
+        model_class = Model,
+        loss = cvaec_loss,
+        models = to_dict(
+            encoder = handmade_models_parts["hm1_enc"],
+            decoder = handmade_models_parts["hm1_dec"],
+        ),
+    ),
+
+    hm2_full = to_dict(
+        model_class = Model,
+        loss = cvaec_loss,
+        models = to_dict(
+            encoder = handmade_models_parts["hm2_enc"],
+            decoder = handmade_models_parts["hm2_dec"],
         ),
     ),
 
@@ -298,6 +519,7 @@ for dn in range(3):
 
 generated_models = {}
 
+# NOTE: kept as a sample how to autogenerate models
 for bn in (True, False):
     for ae_act in ('relu', 'sigmoid', 'tanh'): # TODO: also try , 'elu', 'softsign', 'softplus', 'mish'):
         for lat_act in ('relu', 'sigmoid', 'tanh', 'same'):
@@ -372,7 +594,7 @@ for models_candidates in (handmade_models, generated_models):
 # Гиперпараметры
 
 hp_defaults = to_dict(
-        tabs=['learn', 'XvsY'],
+        tabs=['learn', 'XvsY', 'img2img'],
 )
 
 data_common_vars=to_dict(
@@ -387,7 +609,6 @@ train_common_vars=to_dict(
 hp_template = to_dict(
     **hp_defaults,
     model_vars=to_dict(
-        output_drop_rate    = 0.3
     ),
     data_vars={
         **data_common_vars,
