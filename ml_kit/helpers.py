@@ -34,6 +34,7 @@ ENV[ENV__MODEL__CREATE_REPEAT_NAME] = False
 S_CHAIN = 'chain'
 S_INPUT = 'input'
 S_OUTPUT = 'output'
+S_OUTPUTS = 'outputs'
 S_LAYER = 'layer'
 S_LAYERS = 'layers'
 S_MODEL = 'model'
@@ -241,6 +242,9 @@ def subst_vars(value, variables, recurse=False, var_sign="$", raise_error_when_n
 
 def layer_create(layer_template_data, **variables):
     layer_kind, args, kwargs = layer_template_data
+    layer_kind = subst_vars([layer_kind], variables, recurse=True)[0]
+    if layer_kind is None:
+        return None
     args = [*args]
     kwargs = {k:v for k,v in kwargs.items() if isinstance(k, str) and k[:1] != "_"}
     args = subst_vars(args, variables, recurse=True)
@@ -261,7 +265,11 @@ def layer_create(layer_template_data, **variables):
 def _create_layers_chain(parent, *layers, **variables):
     layers_chain = []
     named = {}
+    inputs_dict = {}
+    outputs_dict = {}
     for layer in layers:
+        if layer[2].get('_input_', None) is not None:
+            layer[2]['_parent_'] = None
         if '_parent_' in layer[2]:
             layer_parent = subst_vars([layer[2]['_parent_']], {**variables, **named}, recurse=True)[0]
         else:
@@ -274,12 +282,29 @@ def _create_layers_chain(parent, *layers, **variables):
             layer_instance = layer_create(layer, **{**variables, **named})
         else:
             layer_instance = layer_create(layer, **{**variables, **named})(layer_parent)
+        if layer_instance is None:
+            continue
         if '_name_' in layer[2]:
             named[layer[2]['_name_']] = layer_instance
         layers_chain.append(layer_instance)
         if layer[2].get('_spinoff_', False) is not True:
             parent = layer_instance
-    return layers_chain, named, parent
+        if layer[2].get('_input_', None) is not None:
+            inputs_dict[layer[2]['_input_']] = layer_instance
+        if layer[2].get('_output_', None) is not None:
+            outputs_dict[layer[2]['_output_']] = layer_instance
+
+    if len(inputs_dict) == 0:
+        inputs = [layers_chain[0]]
+    else:
+        inputs = [inputs_dict[k] for k in sorted(inputs_dict.keys())]
+
+    if len(outputs_dict) == 0:
+        outputs = [parent]
+    else:
+        outputs = [outputs_dict[k] for k in sorted(outputs_dict.keys())]
+
+    return layers_chain, named, inputs, outputs, parent
 
 def _lookup_vars(value, result:list[str], lookup_vars:dict):
     if isinstance(value, (list, tuple)):
@@ -328,8 +353,8 @@ def model_create(model_class, templates, model_kwargs=None, **variables):
                 if '_name_' in layer[2]:
                     named_layers[layer[2]['_name_']] = layer_instance
         else:
-            layers_chain, named_layers, last_in_chain = _create_layers_chain(None, *templates, **{**variables, **named_layers})
-            model = model_class([layers_chain[0]], last_in_chain)
+            layers_chain, named_layers, inputs, outputs, last_in_chain = _create_layers_chain(None, *templates, **{**variables, **named_layers})
+            model = model_class(inputs, outputs)
 
     elif isinstance(templates, dict):
         branches = {}
@@ -410,6 +435,7 @@ def model_create(model_class, templates, model_kwargs=None, **variables):
         for k, v in branches.items():
             if len(v[S_CHILDREN]) + len(v[S_ICHILDREN]) == 0:
                 if k not in outputs:
+                    # TODO: permit childless branches if they are named?
                     raise ValueError(f"Found childless branch '{k}', but it's not specified as output!")
             for c in v[S_CHILDREN]:
                 if c not in branches:
@@ -469,7 +495,7 @@ def model_create(model_class, templates, model_kwargs=None, **variables):
                     parents = None
                 else:
                     parents = branches[v[S_PARENTS][0]][S_CHAIN][-1]
-                branches[k][S_CHAIN], named, last_in_chain = _create_layers_chain(
+                branches[k][S_CHAIN], named, branches[k][S_INPUTS], branches[k][S_OUTPUTS], last_in_chain = _create_layers_chain(
                     parents,
                     *v[S_LAYERS],
                     **{**branch_vars, **named_layers})
@@ -486,13 +512,18 @@ def model_create(model_class, templates, model_kwargs=None, **variables):
                     f"Those branches can't be created (check for circular references): {incomplete_branches}!"
                     f" {[line_break + k + ': [' + ', '.join([kk for kk in branches[k][S_PARENTS]  if S_CHAIN not in branches[k][S_PARENTS]] + [kk for kk in branches[k][S_IPARENTS] if S_CHAIN not in branches[k][S_IPARENTS]]) for k in incomplete_branches]}]"
                     )
-        model = model_class(
-            [branches[k][S_CHAIN][0]  for k in inputs],
-            [branches[k][S_CHAIN][-1] for k in outputs],
-            **model_kwargs
-        )
 
-    return {S_MODEL: model, S_INPUTS: inputs, S_NAMED_LAYERS: named_layers}
+        model_inputs = []
+        for k in inputs:
+            model_inputs += branches[k][S_INPUTS]
+
+        model_outputs = []
+        for k in outputs:
+            model_outputs += branches[k][S_OUTPUTS]
+
+        model = model_class(model_inputs, model_outputs, **model_kwargs)
+
+    return {S_MODEL: model, S_INPUTS: model_inputs, S_OUTPUTS: model_outputs, S_NAMED_LAYERS: named_layers}
 
 
 if STANDALONE:
