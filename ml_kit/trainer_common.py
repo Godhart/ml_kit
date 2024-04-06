@@ -859,8 +859,10 @@ class ModelHandler():
         self.model_variables = model_variables
         self.batch_size      = batch_size
         self._model          = None
-        self._named_layers   = {}
-        self._data           = {}
+        self._inputs         = None
+        self._outputs        = None
+        self._named_layers   = None
+        self._data           = None
         self.data_provider   = data_provider
         self.save_model      = save_model
         self.save_weights    = save_weights
@@ -984,10 +986,13 @@ class ModelHandler():
                 else:
                     result.append(metric)
             return result
-        self._model         = mc[S_MODEL]
-        self._context.inputs_order  = mc[S_INPUTS]
-        self._named_layers  = mc[S_NAMED_LAYERS]    # NOTE: named layers aren't restored on model load, use load_weights if named layers are used!
-        self._data = mc.get(S_DATA, {})
+        self._model                 = mc[S_MODEL]
+        self._context.inputs_order  = mc[S_INPUTS_ORDER]
+        self._inputs                = mc[S_INPUTS]          # NOTE: _inputs         aren't restored on model load! if named layers are required - use load weights instead
+        self._outputs               = mc[S_OUTPUTS]         # NOTE: _outputs        aren't restored on model load! if inputs are required - use load weights instead
+        self._named_layers          = mc[S_NAMED_LAYERS]    # NOTE: _named_layers   aren't restored on model load! if inputs are required - use load weights instead
+        self._data                  = mc[S_DATA]            # NOTE: _data           isn't  restored on model load! if data is required - use load weights instead
+        # TODO: named layers / inputs / outputs and other references may be recovered by from layers name
 
         compile_kwargs = {}
 
@@ -1094,6 +1099,11 @@ class ModelHandler():
                 path / "model.keras",
                 custom_objects=custom_objects,
             )
+            self._inputs = None
+            self._outputs = None
+            self._named_layers = None
+            self._data = None
+            # TODO: restore inputs/outputs/named_layers/data
         elif load_weights is True:
             self.load_weights(path)
 
@@ -1108,6 +1118,11 @@ class ModelHandler():
 
     def unload_model(self):
         self._model = None
+        self._inputs = None
+        self._outputs = None
+        self._named_layers = None
+        self._data = None
+        self._inputs_order = None
 
 
 class ClassClassifierHandler(ModelHandler):
