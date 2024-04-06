@@ -209,14 +209,13 @@ ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 2
 ENV[ENV__TRAIN__DEFAULT_TARGET]          = {}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 5
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
-ENV[ENV__MODEL__CREATE_REPEAT_NAME]      = True
 
 
 # ---------------------------------------------------------------------------- #
 
 # Доподготовка данных
 
-num_classes = np.max(y_train)
+num_classes = np.max(y_train) + 1
 
 y_train_ohe = keras.utils.to_categorical(y_train, num_classes)
 y_test_ohe  = keras.utils.to_categorical(y_test,  num_classes)
@@ -309,7 +308,7 @@ model_items = to_dict(
     encoder_concat = to_dict(
         parents = ["encoder_main", "encoder_classes"],
         layers = [
-            layer_template(concatenate, ["$encoder_main", "$encoder_classes",], _parent_=None,),
+            layer_template(concatenate, ["$encoder_main", "$encoder_classes",], _parent_=None, name=None),
         ],
     ),
     latent_lambda = to_dict(
@@ -338,9 +337,9 @@ model_items = to_dict(
     decoder_input = to_dict(
         input = True,
         layers = [
-            layer_template(Input,  shape=("$latent_dim", ), _name_="dec_input_latent",  _input_ = 0),
-            layer_template(Input,  shape=(num_classes, ),   _name_="dec_input_classes", _input_ = 1),
-            layer_template(concatenate, ["$dec_input_latent", "$dec_input_classes",],   _parent_=None,),
+            layer_template(Input,  shape=("$latent_dim", ), _name_="input_latent",  _input_ = 0),
+            layer_template(Input,  shape=(num_classes, ),   _name_="input_classes", _input_ = 1),
+            layer_template(concatenate, ["$input_latent",   "$input_classes",],     _parent_=None, name=None),
         ],
     ),
 )
@@ -492,15 +491,15 @@ for prefix in ("hm1", "hm2"):
             encoder = to_dict(
                 model = handmade_models_parts[f"{prefix}_enc"],
                 inputs = [
-                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_main/input", ]
-                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_classes/input_classes", ]
+                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_main/input", ],
+                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_classes/input_classes", ],
                 ]
             ),
             decoder = to_dict(
                 model = handmade_models_parts[f"{prefix}_dec"],
                 inputs = [
-                    [f"_encoder_{S_INSTANCE}_", 2],
-                    [f"_decoder_{S_NAMED_LAYERS}_", "decoder_input/dec_input_classes", ],
+                    [f"_encoder_{S_INSTANCE}_", 2], # NOTE: output with index 2 of encoder
+                    [f"_decoder_{S_NAMED_LAYERS}_", "decoder_input/input_classes", ],
                 ],
             ),
             _output_ = f"_decoder_{S_INSTANCE}_",
