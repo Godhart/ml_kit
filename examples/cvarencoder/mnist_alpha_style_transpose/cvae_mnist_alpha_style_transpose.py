@@ -338,9 +338,9 @@ model_items = to_dict(
     decoder_input = to_dict(
         input = True,
         layers = [
-            layer_template(Input,  shape=("$latent_dim", ), _name_="dec_latent_input",  _input_ = 0),
-            layer_template(Input,  shape=(num_classes, ),   _name_="dec_classes_input", _input_ = 1),
-            layer_template(concatenate, ["$dec_latent_input", "$dec_classes_input",],   _parent_=None,),
+            layer_template(Input,  shape=("$latent_dim", ), _name_="dec_input_latent",  _input_ = 0),
+            layer_template(Input,  shape=(num_classes, ),   _name_="dec_input_classes", _input_ = 1),
+            layer_template(concatenate, ["$dec_input_latent", "$dec_input_classes",],   _parent_=None,),
         ],
     ),
 )
@@ -499,7 +499,7 @@ for prefix in ("hm1", "hm2"):
                 model = handmade_models_parts[f"{prefix}_dec"],
                 inputs = [
                     [f"_encoder_{S_INSTANCE}_", 2],
-                    [f"_decoder_{S_NAMED_LAYERS}_", "decoder_input/dec_classes_input", ],
+                    [f"_decoder_{S_NAMED_LAYERS}_", "decoder_input/dec_input_classes", ],
                 ],
             ),
             _output_ = f"_decoder_{S_INSTANCE}_",
