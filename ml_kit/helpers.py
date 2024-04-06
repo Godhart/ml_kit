@@ -22,10 +22,14 @@ import re
 
 ENV__MODEL__CREATE_AUTOIMPORT = 'ENV__MODEL__CREATE_AUTOIMPORT'
 ENV__MODEL__FALLBACK_ARGS = 'ENV__MODEL__FALLBACK_ARGS'
+ENV__MODEL__CREATE_REPEAT_NAME = 'ENV__MODEL__CREATE_REPEAT_NAME'
+
 ENV[ENV__MODEL__CREATE_AUTOIMPORT] = False
 ENV[ENV__MODEL__FALLBACK_ARGS] = {
     "<class 'keras.src.layers.regularization.dropout.Dropout'>": {'seed': 1}
 }
+ENV[ENV__MODEL__CREATE_REPEAT_NAME] = False
+
 
 S_CHAIN = 'chain'
 S_INPUT = 'input'
@@ -262,6 +266,10 @@ def _create_layers_chain(parent, *layers, **variables):
             layer_parent = subst_vars([layer[2]['_parent_']], {**variables, **named}, recurse=True)[0]
         else:
             layer_parent = parent
+        if '_name_' in layer[2]:
+            if ENV[ENV__MODEL__CREATE_REPEAT_NAME]:
+                if 'name' not in layer[2]:
+                    layer[2]['name'] = layer[2]['_name_']
         if layer_parent is None:
             layer_instance = layer_create(layer, **{**variables, **named})
         else:
