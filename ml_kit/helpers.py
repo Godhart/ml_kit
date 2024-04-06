@@ -22,13 +22,11 @@ import re
 
 ENV__MODEL__CREATE_AUTOIMPORT = 'ENV__MODEL__CREATE_AUTOIMPORT'
 ENV__MODEL__FALLBACK_ARGS = 'ENV__MODEL__FALLBACK_ARGS'
-ENV__MODEL__CREATE_REPEAT_NAME = 'ENV__MODEL__CREATE_REPEAT_NAME'
 
 ENV[ENV__MODEL__CREATE_AUTOIMPORT] = False
 ENV[ENV__MODEL__FALLBACK_ARGS] = {
     "<class 'keras.src.layers.regularization.dropout.Dropout'>": {'seed': 1}
 }
-ENV[ENV__MODEL__CREATE_REPEAT_NAME] = False
 
 
 S_CHAIN = 'chain'
@@ -39,6 +37,7 @@ S_LAYER = 'layer'
 S_LAYERS = 'layers'
 S_MODEL = 'model'
 S_INPUTS = 'inputs'
+S_INPUTS_ORDER = 'inputs_order'
 S_PARENTS = 'parents'
 S_CHILDREN = 'children'
 S_IPARENTS = 'iparents'
@@ -271,22 +270,43 @@ def layer_create(layer_template_data, **variables):
     return layer_kind(*args, **kwargs)
 
 
-def _create_layers_chain(parent, *layers, **variables):
+def _create_layers_chain(parent, name_suffix, *layers, **variables):
     layers_chain = []
     named = {}
     inputs_dict = {}
     outputs_dict = {}
+    auto_names = {}
     for layer in layers:
+        if layer[2].get('name', None) is not None and '_name_' not in layer[2]:
+            layer[2]['_name_'] = f"_{layer[2]['name']}_"
+        if layer[2].get('_name_', None) is not None and 'name' not in layer[2]:
+                layer[2]['name'] = f"_{layer[2]['_name_']}_"
         if layer[2].get('_input_', None) is not None:
             layer[2]['_parent_'] = None
+            if 'name' not in layer[2]:
+                layer[2]['name'] = f"_input_{layer[2]['_input_']}_"
+            if '_name_' not in layer[2]:
+                layer[2]['_name_'] = f"_input_{layer[2]['_input_']}_"
+        if layer[2].get('_output_', None) is not None:
+            if 'name' not in layer[2]:
+                layer[2]['name'] = f"_output_{layer[2]['_output_']}_"
+            if '_name_' not in layer[2]:
+                layer[2]['_name_'] = f"_output_{layer[2]['_output_']}_"
         if '_parent_' in layer[2]:
             layer_parent = subst_vars([layer[2]['_parent_']], {**variables, **named}, recurse=True)[0]
         else:
             layer_parent = parent
-        if '_name_' in layer[2]:
-            if ENV[ENV__MODEL__CREATE_REPEAT_NAME]:
-                if 'name' not in layer[2]:
-                    layer[2]['name'] = layer[2]['_name_']
+        if 'name' not in layer[2]:
+            an = f"{layer.__name__}"
+            if an not in auto_names:
+                auto_names[an] = 0
+            auto_names[an] += 1
+            layer[2]['name'] = f"_{an}_{auto_names[an]}_"
+        if layer[2]['name'] is None:
+            del layer[2]['name']
+        else:
+            if name_suffix != "":
+                layer[2]['name'] = f"{name_suffix}/{layer[2]['name']}"
         if layer_parent is None:
             layer_instance = layer_create(layer, **{**variables, **named})
         else:
@@ -362,7 +382,7 @@ def simple_model_create(model_class, templates, model_kwargs=None, **variables):
                 if '_name_' in layer[2]:
                     named_layers[layer[2]['_name_']] = layer_instance
         else:
-            layers_chain, named_layers, inputs, outputs, last_in_chain = _create_layers_chain(None, *templates, **{**variables, **named_layers})
+            layers_chain, named_layers, inputs, outputs, last_in_chain = _create_layers_chain(None, "", *templates, **{**variables, **named_layers})
             model = model_class(inputs, outputs)
 
     elif isinstance(templates, dict):
@@ -504,8 +524,10 @@ def simple_model_create(model_class, templates, model_kwargs=None, **variables):
                     parents = None
                 else:
                     parents = branches[v[S_PARENTS][0]][S_CHAIN][-1]
-                branches[k][S_CHAIN], named, branches[k][S_INPUTS], branches[k][S_OUTPUTS], last_in_chain = _create_layers_chain(
+                branches[k][S_CHAIN], named, branches[k][S_INPUTS], branches[k][S_OUTPUTS], last_in_chain = \
+                _create_layers_chain(
                     parents,
+                    k,
                     *v[S_LAYERS],
                     **{**branch_vars, **named_layers})
                 for nk, nv in named.items():
@@ -532,7 +554,12 @@ def simple_model_create(model_class, templates, model_kwargs=None, **variables):
 
         model = model_class(model_inputs, model_outputs, **model_kwargs)
 
-    return {S_MODEL: model, S_INPUTS: model_inputs, S_OUTPUTS: model_outputs, S_NAMED_LAYERS: named_layers}
+        inputs_order = []
+        for mi in model_inputs:
+            inputs_order.append(mi.name)
+
+    return {S_MODEL: model, S_INPUTS_ORDER: inputs_order, S_NAMED_LAYERS: named_layers,
+            S_INPUTS: model_inputs, S_OUTPUTS: model_outputs, S_DATA: {}}
 
 
 def complex_model_create(
@@ -547,7 +574,9 @@ def complex_model_create(
             data[f"_{k}_{kk}_"] = vv
             data[f"_{k}_{kk}_"] = vv
 
-    inputs = [] # TODO:
+    inputs = [] # TODO: make sure it's done properly
+    # Now it contains input layers references
+    # It should be enough BUT not fact that order be as calculated below
 
     # Create instances
     for k, v in submodels.items():
@@ -558,7 +587,7 @@ def complex_model_create(
                 pass_to_input = True
                 for ep_item in ep_path:
                     ep = ep[ep_item]
-                    if ep[-len(S_INSTANCE)+2:] == f"_{S_INSTANCE}_":
+                    if ep[-len(f"_{S_INSTANCE}_"):] == f"_{S_INSTANCE}_":
                         # Don't add inter-model connections to inputs
                         pass_to_input = False
             instance_inputs.append(ep)
@@ -566,14 +595,19 @@ def complex_model_create(
                 inputs.append(ep)
         data[f"_{k}_{S_INSTANCE}_"] = data[f"_{k}_{S_MODEL}_"](instance_inputs)
 
-    output = data[submodels[f"_{S_OUTPUT}_"]]
+    model = data[submodels[f"_{S_OUTPUT}_"]]
     outputs = data[submodels[f"_{S_OUTPUT}_"]][S_OUTPUTS]
     named_layers = {}
     for k in submodels.keys():
         for kk, vv in data[f"_{k}_{S_NAMED_LAYERS}_"].items():
             named_layers[f"{k}/{kk}"] = v
 
-    return {S_MODEL: output, S_INPUTS: inputs, S_OUTPUTS: outputs, S_NAMED_LAYERS: named_layers, S_DATA: data}
+    inputs_order = []
+    for item in inputs:
+        inputs_order.append(item.name)
+
+    return {S_MODEL: model, S_INPUTS_ORDER: inputs_order, S_NAMED_LAYERS: named_layers,
+            S_INPUTS: inputs, S_OUTPUTS: outputs, S_DATA: data}
 
 def model_create(model_class, templates, model_kwargs=None, **variables):
     if isinstance(templates, dict):
