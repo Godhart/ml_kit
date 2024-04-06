@@ -979,16 +979,30 @@ class ModelHandler():
         self._model         = mc[S_MODEL]
         self._context.inputs_order  = mc[S_INPUTS]
         self._named_layers  = mc[S_NAMED_LAYERS]    # NOTE: named layers aren't restored on model load, use load_weights if named layers are used!
+
+        compile_kwargs = {}
+
         if isinstance(self.context.optimizer, (list, tuple)):
-            optimizer = self.context.optimizer[0](*self.context.optimizer[1], **self.context.optimizer[2])
+            compile_kwargs['optimizer'] = self.context.optimizer[0](*self.context.optimizer[1], **self.context.optimizer[2])
         elif callable(self.context.optimizer):
-            optimizer = self.context.optimizer()
+            compile_kwargs['optimizer'] = self.context.optimizer()
         else:
-            optimizer = self.context.optimizer
+            compile_kwargs['optimizer'] = self.context.optimizer
+
+        if callable(self.context.loss):
+            losses = self.context.loss(self)
+            if not isinstance(losses, (tuple, list)):
+                losses = [losses]
+            for loss in losses:
+                self._model.add_loss(loss)
+        else:
+            compile_kwargs['loss'] = self.context.loss
+
+        if len(self.context.metrics) > 0:
+            compile_kwargs['metrics'] = get_metrics(self.context.metrics)
+
         self._model.compile(
-            optimizer=optimizer,
-            loss=self.context.loss,
-            metrics=get_metrics(self.context.metrics),
+            **compile_kwargs,
         )
 
     def fit(self, epochs, initial_epoch=None, kwargs=None):
