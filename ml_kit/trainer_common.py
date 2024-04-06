@@ -860,6 +860,7 @@ class ModelHandler():
         self.batch_size      = batch_size
         self._model          = None
         self._named_layers   = {}
+        self._data           = {}
         self.data_provider   = data_provider
         self.save_model      = save_model
         self.save_weights    = save_weights
@@ -931,6 +932,10 @@ class ModelHandler():
         return {**self._named_layers}
 
     @property
+    def data(self):
+        return {**self._data}
+
+    @property
     def inputs_order(self):
         return self._context.inputs_order
 
@@ -982,6 +987,7 @@ class ModelHandler():
         self._model         = mc[S_MODEL]
         self._context.inputs_order  = mc[S_INPUTS]
         self._named_layers  = mc[S_NAMED_LAYERS]    # NOTE: named layers aren't restored on model load, use load_weights if named layers are used!
+        self._data = mc.get(S_DATA, {})
 
         compile_kwargs = {}
 
