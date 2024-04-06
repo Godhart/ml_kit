@@ -238,10 +238,10 @@ def noise_gen(args, latent_dim):
 
 
 def cvaec_loss(mhd):
-    input_img   = mhd.sub_models['enc'].named_layers['encoder_main/input']
-    z_mean      = mhd.sub_models['enc'].named_layers['latent/z_log_var']
-    z_log_var   = mhd.sub_models['enc'].named_layers['latent/z_mean']
-    outputs     = mhd.sub_models['dec'].model
+    input_img   = mhd.named_layers['encoder_model/encoder_main/input']
+    z_mean      = mhd.named_layers['encoder_model/latent/z_log_var']
+    z_log_var   = mhd.named_layers['encoder_model/latent/z_mean']
+    outputs     = mhd.data["encoder"][S_MODEL]
 
     reconstruction_loss = keras.losses.MSE(input_img, outputs)      # Рассчитаем ошибку восстановления изображения - лоссы MSE
     reconstruction_loss *= mult(x_train.shape[1:])                  # Уберем нормировку MSE
