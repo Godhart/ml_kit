@@ -966,6 +966,9 @@ class ModelHandler():
         mc = model_create(
             self.model_class,
             self.model_template,
+            model_kwargs=to_dict(
+                name = self.name
+            ),
             **self.model_variables
         )
         def get_metrics(metrics):
