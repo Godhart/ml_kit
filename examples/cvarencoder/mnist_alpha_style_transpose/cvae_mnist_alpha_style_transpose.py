@@ -239,7 +239,7 @@ def noise_gen(args, latent_dim):
 
 
 def cvaec_loss(mhd):
-    input_img   = mhd.sub_models['enc'].named_layers['enc_cnn/enc_cnn_input']
+    input_img   = mhd.sub_models['enc'].named_layers['encoder_main/input']
     z_mean      = mhd.sub_models['enc'].named_layers['latent/z_log_var']
     z_log_var   = mhd.sub_models['enc'].named_layers['latent/z_mean']
     outputs     = mhd.sub_models['dec'].model
@@ -307,9 +307,9 @@ model_items = to_dict(
         ],
     ),
     encoder_concat = to_dict(
-        parents = ["encoder_cnn", "encoder_classes"],
+        parents = ["encoder_main", "encoder_classes"],
         layers = [
-            layer_template(concatenate, ["$encoder_cnn", "$encoder_classes",], _parent_=None,),
+            layer_template(concatenate, ["$encoder_main", "$encoder_classes",], _parent_=None,),
         ],
     ),
     latent_lambda = to_dict(
@@ -365,10 +365,10 @@ handmade_models_parts = to_dict(
         thd_kwargs = to_dict(
         ),
         template = to_dict(
-            encoder_cnn = to_dict(
+            encoder_main = to_dict(
                 input  = True,
                 layers = [
-                    layer_template(Input,   input_shape, name="enc_cnn_input"),
+                    layer_template(Input,   input_shape, name="input"),
                     *enc_cnn_layer("enc_l", 1, 32, "$kernel_size", 1),
                     *enc_cnn_layer("enc_l", 2, 64, "$kernel_size", 2),
                     *enc_cnn_layer("enc_l", 3, 64, "$kernel_size", 2),
@@ -432,10 +432,10 @@ handmade_models_parts = to_dict(
         thd_kwargs = to_dict(
         ),
         template = to_dict(
-            encoder_cnn = to_dict(
+            encoder_main = to_dict(
                 input  = True,
                 layers = [
-                    layer_template(Input,   input_shape, name="enc_cnn_input"),
+                    layer_template(Input,   input_shape, name="input"),
                     layer_template(Conv2D,  32, "$kernel_size", strides=2, activation="$cnn_act", padding="same", name="enc_l1_cnn"),
                     layer_template(Conv2D,  64, "$kernel_size", strides=2, activation="$cnn_act", padding="same", name="enc_l2_cnn"),
                     layer_template(Flatten, name="enc_cnn_flat"),
@@ -481,27 +481,30 @@ handmade_models_parts = to_dict(
 )
 
 
-handmade_models = to_dict(
+handmade_models = {}
 
-    hm1_full = to_dict(
+for prefix in ("hm1", "hm2"):
+    handmade_models[f"{prefix}_full"] = to_dict(
         model_class = Model,
         loss = cvaec_loss,
-        models = to_dict(
-            encoder = handmade_models_parts["hm1_enc"],
-            decoder = handmade_models_parts["hm1_dec"],
+        submodels = to_dict(
+            encoder = to_dict(
+                model = handmade_models_parts[f"{prefix}_enc"],
+                inputs = [
+                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_main/input", ]
+                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_classes/input_classes", ]
+                ]
+            ),
+            decoder = to_dict(
+                model = handmade_models_parts[f"{prefix}_dec"],
+                inputs = [
+                    [f"_encoder_{S_INSTANCE}_", 2],
+                    [f"_decoder_{S_NAMED_LAYERS}_", "decoder_input/dec_classes_input", ],
+                ],
+            ),
+            _output_ = f"_decoder_{S_INSTANCE}_",
         ),
-    ),
-
-    hm2_full = to_dict(
-        model_class = Model,
-        loss = cvaec_loss,
-        models = to_dict(
-            encoder = handmade_models_parts["hm2_enc"],
-            decoder = handmade_models_parts["hm2_dec"],
-        ),
-    ),
-
-)
+    )
 
 models_proto = {}
 
