@@ -458,6 +458,7 @@ handmade_models_parts = to_dict(
             ldense_dim  = 16,
             latent_dim  = 2,
             kernel_size = 3,
+            cnn_act     = "relu",
         ),
         thd_kwargs = to_dict(
         ),
