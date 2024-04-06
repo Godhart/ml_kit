@@ -988,8 +988,8 @@ class ModelHandler():
             return result
         self._model                 = mc[S_MODEL]
         self._context.inputs_order  = mc[S_INPUTS_ORDER]
-        self._inputs                = mc[S_INPUTS]          # NOTE: _inputs         aren't restored on model load! if named layers are required - use load weights instead
-        self._outputs               = mc[S_OUTPUTS]         # NOTE: _outputs        aren't restored on model load! if inputs are required - use load weights instead
+        self._inputs                = mc[S_INPUTS]
+        self._outputs               = mc[S_OUTPUTS]
         self._named_layers          = mc[S_NAMED_LAYERS]    # NOTE: _named_layers   aren't restored on model load! if inputs are required - use load weights instead
         self._data                  = mc[S_DATA]            # NOTE: _data           isn't  restored on model load! if data is required - use load weights instead
         # TODO: named layers / inputs / outputs and other references may be recovered by from layers name
@@ -1099,8 +1099,8 @@ class ModelHandler():
                 path / "model.keras",
                 custom_objects=custom_objects,
             )
-            self._inputs = None
-            self._outputs = None
+            self._inputs = self._model.inputs
+            self._outputs = self._model.outputs
             self._named_layers = None
             self._data = None
             # TODO: restore inputs/outputs/named_layers/data
