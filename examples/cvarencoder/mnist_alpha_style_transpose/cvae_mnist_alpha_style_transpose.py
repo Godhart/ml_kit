@@ -297,7 +297,10 @@ def dec_cnn_layer(prefix, idx, neurons, kernel_size, strides):
         layer_template("$cnn_activation", name=f"{prefix}_act{idx}",),
     ]
 
-
+########################################
+# Elementary items to construct models #
+# (those that are common to models)    #
+########################################
 model_items = to_dict(
     encoder_classes = to_dict(
         input = True,
@@ -344,7 +347,10 @@ model_items = to_dict(
     ),
 )
 
-
+#####################################
+# Large parts / models              #
+# (those that are common to models) #
+#####################################
 handmade_models_parts = to_dict(
 
     ##############
@@ -477,6 +483,78 @@ handmade_models_parts = to_dict(
         ),
     ),
 
+    ######################################
+    # Common part of CVAEC               #
+    # (excluding encoder/decoder models) #
+    ######################################
+    cvaec_common_part = to_dict(
+        ae_encoder = to_dict(
+            model_class ="encoder_model",
+            kwargs = to_dict(name = None),
+            inputs = [
+                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+            ],
+        ),
+        ae = to_dict(
+            model_class = "decoder_model",
+            kwargs = to_dict(name = None),
+            inputs = [
+                ["ae_encoder",    S_MODEL,        2, ],
+                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+            ],
+
+        ),
+        cvaec = to_dict(
+            model_class = Model,
+            inputs = [
+                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+            ],
+            outputs = [
+                ["ae", S_MODEL, ]
+            ],
+        ),
+        z_meaner_model = to_dict(
+            model_class = Model,
+            inputs = [
+                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+            ],
+            outputs = [
+                ["encoder_model", S_NAMED_LAYERS, "latent/z_mean"],
+            ],
+        ),
+        z_meaner = to_dict(
+            model_class = "z_meaner_model",
+            kwargs = to_dict(name = None),
+            inputs = [
+                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+            ],
+        ),
+        decoder_tr = to_dict(
+            model_class = "decoder_model",
+            kwargs = to_dict(name = None),
+            inputs = [
+                ["z_meaner",      S_MODEL, ],
+                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+            ]
+        ),
+        tr_style = to_dict(
+            model_class = Model,
+            inputs = [
+                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+            ],
+            outputs = [
+                ["decoder_tr",    S_MODEL, ],
+            ],
+        ),
+        _output_ = "cvaec",
+    ),
 )
 
 
@@ -489,77 +567,12 @@ for prefix in ("hm1", "hm2"):
         submodels = to_dict(
             _kind_ = S_COMPLEX,
             encoder_model = to_dict(
-                model_template = {**handmade_models_parts[f"{prefix}_enc"]},
+                model_template = copy.deepcopy(handmade_models_parts[f"{prefix}_enc"]),
             ),
             decoder_model = to_dict(
-                model_template = {**handmade_models_parts[f"{prefix}_dec"]},
+                model_template = copy.deepcopy(handmade_models_parts[f"{prefix}_dec"]),
             ),
-            ae_encoder = to_dict(
-                model_class ="encoder_model",
-                kwargs = to_dict(name = None),
-                inputs = [
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-                ],
-            ),
-            ae = to_dict(
-                model_class = "decoder_model",
-                kwargs = to_dict(name = None),
-                inputs = [
-                    ["ae_encoder",    S_MODEL,        2, ],
-                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
-                ],
-
-            ),
-            cvaec = to_dict(
-                model_class = Model,
-                inputs = [
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
-                ],
-                outputs = [
-                    ["ae", S_MODEL, ]
-                ],
-            ),
-            z_meaner_model = to_dict(
-                model_class = Model,
-                inputs = [
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-                ],
-                outputs = [
-                    ["encoder_model", S_NAMED_LAYERS, "latent/z_mean"],
-                ],
-            ),
-            z_meaner = to_dict(
-                model_class = "z_meaner_model",
-                kwargs = to_dict(name = None),
-                inputs = [
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-                ],
-            ),
-            decoder_tr = to_dict(
-                model_class = "decoder_model",
-                kwargs = to_dict(name = None),
-                inputs = [
-                    ["z_meaner",      S_MODEL, ],
-                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
-                ]
-            ),
-            tr_style = to_dict(
-                model_class = Model,
-                inputs = [
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
-                ],
-                outputs = [
-                    ["decoder_tr",    S_MODEL, ],
-                ],
-            ),
-            _output_ = "cvaec",
+            **copy.deepcopy(handmade_models_parts["cvaec_common_part"]),
         ),
     )
 
