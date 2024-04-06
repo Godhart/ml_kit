@@ -36,6 +36,9 @@ S_OUTPUTS = 'outputs'
 S_LAYER = 'layer'
 S_LAYERS = 'layers'
 S_MODEL = 'model'
+S_MODEL_CLASS = 'model_class'
+S_MODEL_TEMPLATE = 'model_template'
+S_NAME = "name"
 S_INPUTS = 'inputs'
 S_INPUTS_ORDER = 'inputs_order'
 S_PARENTS = 'parents'
@@ -49,6 +52,7 @@ S_SUBMODELS = 'submodels'
 S_SIMPLE = 'simple'
 S_COMPLEX = 'complex'
 S_DATA = 'data'
+S_VARS = 'vars'
 
 S_ARGS = 'args'
 S_KWARGS = 'kwargs'
@@ -278,7 +282,7 @@ def _create_layers_chain(parent, name_suffix, *layers, **variables):
     auto_names = {}
     for layer in layers:
         if layer[2].get('name', None) is not None and '_name_' not in layer[2]:
-            layer[2]['_name_'] = f"_{layer[2]['name']}_"
+            layer[2]['_name_'] = f"{layer[2]['name']}"
         if layer[2].get('_name_', None) is not None and 'name' not in layer[2]:
                 layer[2]['name'] = f"_{layer[2]['_name_']}_"
         if layer[2].get('_input_', None) is not None:
@@ -489,6 +493,7 @@ def simple_model_create(model_class, templates, model_kwargs=None, **variables):
         # Check not supported cases:
         for k, v in branches.items():
             if len(v[S_PARENTS]) > 1:
+                continue
                 raise NotImplementedError(
                     f"Multiple parents were found for branch {k}! It's not supported (yet)"
                     f" ({v[S_PARENTS]})")
@@ -568,46 +573,79 @@ def complex_model_create(
     # Create models
     data = {}
     for k, v in submodels.items():
-        model_kwargs = submodel.get(S_KWARGS, None)
-        submodel = simple_model_create(model_class, v[S_MODEL], to_dict(name=k), model_kwargs, **variables)
-        for kk, vv in submodel.items():
-            data[f"_{k}_{kk}_"] = vv
-            data[f"_{k}_{kk}_"] = vv
+        if isinstance(k, str):
+            if k[:1] == "_" and k[-1:] == "_":
+                continue
 
-    inputs = [] # TODO: make sure it's done properly
-    # Now it contains input layers references
-    # It should be enough BUT not fact that order be as calculated below
+        model_kwargs = v.get(S_KWARGS, {})
+        if S_NAME not in model_kwargs:
+            model_kwargs[S_NAME] = k
 
-    # Create instances
-    for k, v in submodels.items():
-        instance_inputs = []
-        if len(v[S_INPUTS]) > 0:
+        if S_MODEL_TEMPLATE in v:
+
+            data[k] = simple_model_create(
+                v[S_MODEL_TEMPLATE]['model_class'],
+                v[S_MODEL_TEMPLATE]['template'],
+                model_kwargs,
+                **v[S_MODEL_TEMPLATE].get(S_VARS, {}))
+        elif S_MODEL_CLASS in v:
+
+            model_inputs = []
             for ep_path in v[S_INPUTS]:
                 ep = data
-                pass_to_input = True
                 for ep_item in ep_path:
                     ep = ep[ep_item]
-                    if ep[-len(f"_{S_INSTANCE}_"):] == f"_{S_INSTANCE}_":
-                        # Don't add inter-model connections to inputs
-                        pass_to_input = False
-            instance_inputs.append(ep)
-            if pass_to_input:
-                inputs.append(ep)
-        data[f"_{k}_{S_INSTANCE}_"] = data[f"_{k}_{S_MODEL}_"](instance_inputs)
+                model_inputs.append(ep)
 
-    model = data[submodels[f"_{S_OUTPUT}_"]]
-    outputs = data[submodels[f"_{S_OUTPUT}_"]][S_OUTPUTS]
+            model_outputs = []
+            if S_OUTPUTS in v:
+                for ep_path in v[S_OUTPUTS]:
+                    ep = data
+                    for ep_item in ep_path:
+                        ep = ep[ep_item]
+                    model_outputs.append(ep)
+
+            args = []
+
+            args.append(model_inputs)
+
+            if len(model_outputs) > 0:
+                args.append(model_outputs)
+
+            if isinstance(v[S_MODEL_CLASS], str):
+                model_class = data[v[S_MODEL_CLASS]][S_MODEL]
+            else:
+                model_class = v[S_MODEL_CLASS]
+
+            if S_NAME in model_kwargs and model_kwargs[S_NAME] is None:
+                del model_kwargs[S_NAME]
+
+            data[k] = {}
+            data[k][S_MODEL] = model_class(*args, **model_kwargs)
+            data[k][S_INPUTS] = model_inputs
+            data[k][S_OUTPUTS] = model_outputs
+            data[k][S_INPUTS_ORDER] = [item.name for item in model_inputs]
+            data[k][S_NAMED_LAYERS] = {}
+            data[k][S_DATA] = {}
+        else:
+            raise ValueError("No supported scheme for model found!")
+
+    output_model = data[submodels[f"_{S_OUTPUT}_"]]
     named_layers = {}
     for k in submodels.keys():
-        for kk, vv in data[f"_{k}_{S_NAMED_LAYERS}_"].items():
-            named_layers[f"{k}/{kk}"] = v
+        if isinstance(k, str):
+            if k[:1] == "_" and k[-1:] == "_":
+                continue
+        if S_NAMED_LAYERS not in data[k]:
+            continue
+        for kk, vv in data[k][S_NAMED_LAYERS].items():
+            named_layers[f"{k}/{kk}"] = vv
 
-    inputs_order = []
-    for item in inputs:
-        inputs_order.append(item.name)
+    result = {**output_model}
+    result[S_NAMED_LAYERS] = named_layers
+    result[S_DATA] = data
+    return result
 
-    return {S_MODEL: model, S_INPUTS_ORDER: inputs_order, S_NAMED_LAYERS: named_layers,
-            S_INPUTS: inputs, S_OUTPUTS: outputs, S_DATA: data}
 
 def model_create(model_class, templates, model_kwargs=None, **variables):
     if isinstance(templates, dict):
