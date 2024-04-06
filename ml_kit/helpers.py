@@ -44,6 +44,10 @@ S_CHILDREN = 'children'
 S_IPARENTS = 'iparents'
 S_ICHILDREN = 'ichildren'
 S_NAMED_LAYERS = 'named_layers'
+S_INSTANCE = 'instance'
+
+S_ARGS = 'args'
+S_KWARGS = 'kwargs'
 
 
 def mult(*values):
@@ -525,6 +529,31 @@ def model_create(model_class, templates, model_kwargs=None, **variables):
 
     return {S_MODEL: model, S_INPUTS: model_inputs, S_OUTPUTS: model_outputs, S_NAMED_LAYERS: named_layers}
 
+
+def complex_model_create(
+    model_class, submodels, **variables
+):
+    # Create models
+    data = {}
+    for k, v in submodels.items():
+        model_kwargs = submodel.get(S_KWARGS, None)
+        submodel = model_create(model_class, v[S_MODEL], to_dict(name=k), model_kwargs, **variables)
+        for kk, vv in submodel.items():
+            data[f"_{k}_{kk}_"] = vv
+            data[f"_{k}_{kk}_"] = vv
+
+    # Create instances
+    for k, v in submodels.items():
+        inputs = []
+        if len(v[S_INPUTS]) > 0:
+            ep = data
+            for ep_path in v[S_INPUTS]:
+                for ep_item in ep_path:
+                    ep = ep[ep_item]
+            inputs.append(ep)
+        data[f"_{k}_{S_INSTANCE}_"] = data[f"_{k}_{S_MODEL}_"](inputs)
+
+    return data[submodels[f"_{S_OUTPUT}_"]], data
 
 if STANDALONE:
     if __name__ == "__main__":
