@@ -45,6 +45,11 @@ S_IPARENTS = 'iparents'
 S_ICHILDREN = 'ichildren'
 S_NAMED_LAYERS = 'named_layers'
 S_INSTANCE = 'instance'
+S_KIND = 'kind'
+S_SUBMODELS = 'submodels'
+S_SIMPLE = 'simple'
+S_COMPLEX = 'complex'
+S_DATA = 'data'
 
 S_ARGS = 'args'
 S_KWARGS = 'kwargs'
@@ -333,7 +338,7 @@ def _get_iparents(templates, layers:list[str]):
     return result
 
 
-def model_create(model_class, templates, model_kwargs=None, **variables):
+def simple_model_create(model_class, templates, model_kwargs=None, **variables):
     """
     Помогатор для создания модели
     """
@@ -537,23 +542,52 @@ def complex_model_create(
     data = {}
     for k, v in submodels.items():
         model_kwargs = submodel.get(S_KWARGS, None)
-        submodel = model_create(model_class, v[S_MODEL], to_dict(name=k), model_kwargs, **variables)
+        submodel = simple_model_create(model_class, v[S_MODEL], to_dict(name=k), model_kwargs, **variables)
         for kk, vv in submodel.items():
             data[f"_{k}_{kk}_"] = vv
             data[f"_{k}_{kk}_"] = vv
 
+    inputs = [] # TODO:
+
     # Create instances
     for k, v in submodels.items():
-        inputs = []
+        instance_inputs = []
         if len(v[S_INPUTS]) > 0:
-            ep = data
             for ep_path in v[S_INPUTS]:
+                ep = data
+                pass_to_input = True
                 for ep_item in ep_path:
                     ep = ep[ep_item]
-            inputs.append(ep)
-        data[f"_{k}_{S_INSTANCE}_"] = data[f"_{k}_{S_MODEL}_"](inputs)
+                    if ep[-len(S_INSTANCE)+2:] == f"_{S_INSTANCE}_":
+                        # Don't add inter-model connections to inputs
+                        pass_to_input = False
+            instance_inputs.append(ep)
+            if pass_to_input:
+                inputs.append(ep)
+        data[f"_{k}_{S_INSTANCE}_"] = data[f"_{k}_{S_MODEL}_"](instance_inputs)
 
-    return data[submodels[f"_{S_OUTPUT}_"]], data
+    output = data[submodels[f"_{S_OUTPUT}_"]]
+    outputs = data[submodels[f"_{S_OUTPUT}_"]][S_OUTPUTS]
+    named_layers = {}
+    for k in submodels.keys():
+        for kk, vv in data[f"_{k}_{S_NAMED_LAYERS}_"].items():
+            named_layers[f"{k}/{kk}"] = v
+
+    return {S_MODEL: output, S_INPUTS: inputs, S_OUTPUTS: outputs, S_NAMED_LAYERS: named_layers, S_DATA: data}
+
+def model_create(model_class, templates, model_kwargs=None, **variables):
+    if isinstance(templates, dict):
+        kind = templates.get(f"_{S_KIND}_", None)
+    else:
+        kind = None
+
+    if kind in (None, S_SIMPLE):
+        return simple_model_create(model_class, templates, model_kwargs, **variables)
+    elif kind == S_COMPLEX:
+        return complex_model_create(model_class, templates, **variables)
+    else:
+        raise ValueError(f"Unsupported template kind: '{kind}'")
+
 
 if STANDALONE:
     if __name__ == "__main__":
