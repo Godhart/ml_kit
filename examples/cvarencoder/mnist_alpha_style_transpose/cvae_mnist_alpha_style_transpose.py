@@ -215,7 +215,7 @@ ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
 # Доподготовка данных
 
-num_classes = np.max(y_train) + 1
+num_classes = int(np.max(y_train)) + 1
 
 y_train_ohe = keras.utils.to_categorical(y_train, num_classes)
 y_test_ohe  = keras.utils.to_categorical(y_test,  num_classes)
@@ -316,8 +316,8 @@ model_items = to_dict(
         output = True,
         layers = [
             layer_template(Dense, "$ldense_dim", activation='linear',   name='latent_input', ),
-            layer_template(Dense, "$latent_dim", _name_="z_mean"    ,   _output_=0),        # TODO: Activation?
-            layer_template(Dense, "$latent_dim", _name_="z_log_var" ,   _output_=1),        # TODO: Activation?
+            layer_template(Dense, "$latent_dim", name="z_mean"    ,     _output_=0),        # TODO: Activation?
+            layer_template(Dense, "$latent_dim", name="z_log_var" ,     _output_=1),        # TODO: Activation?
             layer_template(
                 Lambda, "$noise_gen", output_shape=("$latent_dim",) ,   name='noise_gen',
                 _parent_=["$z_mean", "$z_log_var"],                     _output_=2),
@@ -328,8 +328,8 @@ model_items = to_dict(
         output = True,
         layers = [
             layer_template(Dense, "$ldense_dim", activation='linear',   name='latent_input', ),
-            layer_template(Dense, "$latent_dim", _name_="z_mean"    ,   _output_=0),        # TODO: Activation?
-            layer_template(Dense, "$latent_dim", _name_="z_log_var" ,   _output_=1),        # TODO: Activation?
+            layer_template(Dense, "$latent_dim", name="z_mean"    ,     _output_=0),        # TODO: Activation?
+            layer_template(Dense, "$latent_dim", name="z_log_var" ,     _output_=1),        # TODO: Activation?
             layer_template(Sampling, name="noise_gen",
                 _parent_=["$z_mean", "$z_log_var"],                     _output_=2),
         ],
@@ -337,8 +337,8 @@ model_items = to_dict(
     decoder_input = to_dict(
         input = True,
         layers = [
-            layer_template(Input,  shape=("$latent_dim", ), _name_="input_latent",  _input_ = 0),
-            layer_template(Input,  shape=(num_classes, ),   _name_="input_classes", _input_ = 1),
+            layer_template(Input,  shape=("$latent_dim", ), name="input_latent",    _input_ = 0),
+            layer_template(Input,  shape=(num_classes, ),   name="input_classes",   _input_ = 1),
             layer_template(concatenate, ["$input_latent",   "$input_classes",],     _parent_=None, name=None),
         ],
     ),
@@ -401,7 +401,7 @@ handmade_models_parts = to_dict(
             decoder_input = {**model_items['decoder_input']},
             decoder_cnn = to_dict(
                 output = True,
-                parent = "decoder_input",
+                parents = ["decoder_input"],
                 layers = [
                     layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
                     layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
@@ -484,25 +484,82 @@ handmade_models = {}
 
 for prefix in ("hm1", "hm2"):
     handmade_models[f"{prefix}_full"] = to_dict(
-        model_class = Model,
         loss = cvaec_loss,
+        vars = {},
         submodels = to_dict(
             _kind_ = S_COMPLEX,
-            encoder = to_dict(
-                model = handmade_models_parts[f"{prefix}_enc"],
-                inputs = [
-                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_main/input", ],
-                    [f"_encoder_{S_NAMED_LAYERS}_", "encoder_classes/input_classes", ],
-                ]
+            encoder_model = to_dict(
+                model_template = {**handmade_models_parts[f"{prefix}_enc"]},
             ),
-            decoder = to_dict(
-                model = handmade_models_parts[f"{prefix}_dec"],
+            decoder_model = to_dict(
+                model_template = {**handmade_models_parts[f"{prefix}_dec"]},
+            ),
+            ae_encoder = to_dict(
+                model_class ="encoder_model",
+                kwargs = to_dict(name = None),
                 inputs = [
-                    [f"_encoder_{S_INSTANCE}_", 2], # NOTE: output with index 2 of encoder
-                    [f"_decoder_{S_NAMED_LAYERS}_", "decoder_input/input_classes", ],
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
                 ],
             ),
-            _output_ = f"_decoder_{S_INSTANCE}_",
+            ae = to_dict(
+                model_class = "decoder_model",
+                kwargs = to_dict(name = None),
+                inputs = [
+                    ["ae_encoder",    S_MODEL,        2, ],
+                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ],
+
+            ),
+            cvaec = to_dict(
+                model_class = Model,
+                inputs = [
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ],
+                outputs = [
+                    ["ae", S_MODEL, ]
+                ],
+            ),
+            z_meaner_model = to_dict(
+                model_class = Model,
+                inputs = [
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ],
+                outputs = [
+                    ["encoder_model", S_NAMED_LAYERS, "latent/z_mean"],
+                ],
+            ),
+            z_meaner = to_dict(
+                model_class = "z_meaner_model",
+                kwargs = to_dict(name = None),
+                inputs = [
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ],
+            ),
+            decoder_tr = to_dict(
+                model_class = "decoder_model",
+                kwargs = to_dict(name = None),
+                inputs = [
+                    ["z_meaner",      S_MODEL, ],
+                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ]
+            ),
+            tr_style = to_dict(
+                model_class = Model,
+                inputs = [
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
+                    ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                    ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ],
+                outputs = [
+                    ["decoder_tr",    S_MODEL, ],
+                ],
+            ),
+            _output_ = "cvaec",
         ),
     )
 
@@ -589,6 +646,29 @@ for models_candidates in (handmade_models, generated_models):
         if not use_model(k):
             continue
         models[k] = v
+
+# ---------------------------------------------------------------------------- #
+
+if False:
+    from ml_kit.trainer_common import ModelHandler
+
+    mhd = ModelHandler(
+        "test",
+        Model,
+        Adam,
+        S_MSE,
+        [S_MSE],
+        models['hm1_full'][S_SUBMODELS],
+        models["hm1_full"][S_VARS],
+        load_weights_only=True,
+    )
+
+    mhd.create()
+
+    mhd.model.summary()
+
+    a = 1 / 0
+
 
 # ---------------------------------------------------------------------------- #
 
