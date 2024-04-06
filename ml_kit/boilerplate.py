@@ -91,7 +91,7 @@ def model_create_default(
         optimizer       = model_data.get('optimizer', ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]),
         loss            = model_data.get('loss',      ENV[ENV__TRAIN__DEFAULT_LOSS]),
         metrics         = model_data.get('metrics',   hp.get('metrics', ENV[ENV__TRAIN__DEFAULT_METRICS])),
-        model_template  = model_data['template'],
+        model_template  = model_data.get('template' , None) or model_data[S_SUBMODELS],
         model_variables = model_vars,
         batch_size      = train_vars.get('batch_size',ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]),
         data_provider   = data_provider,
