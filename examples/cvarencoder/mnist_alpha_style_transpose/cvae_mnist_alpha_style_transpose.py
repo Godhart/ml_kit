@@ -400,7 +400,7 @@ handmade_models_parts = to_dict(
         ),
         template = to_dict(
             decoder_input = {**model_items['decoder_input']},
-            encoder_cnn = to_dict(
+            decoder_cnn = to_dict(
                 output = True,
                 parent = "decoder_input",
                 layers = [
@@ -464,7 +464,7 @@ handmade_models_parts = to_dict(
         ),
         template = to_dict(
             decoder_input = {**model_items['decoder_input']},
-            encoder_cnn = to_dict(
+            decoder_cnn = to_dict(
                 output = True,
                 parent = "decoder_input",
                 layers = [
