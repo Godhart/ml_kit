@@ -488,6 +488,7 @@ for prefix in ("hm1", "hm2"):
         model_class = Model,
         loss = cvaec_loss,
         submodels = to_dict(
+            _kind_ = S_COMPLEX,
             encoder = to_dict(
                 model = handmade_models_parts[f"{prefix}_enc"],
                 inputs = [
