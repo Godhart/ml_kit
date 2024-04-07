@@ -237,10 +237,10 @@ def noise_gen(args, latent_dim):
     return K.exp(z_log_var / 2) * N + z_mean
 
 
-def cvaec_loss(mhd):
-    input_img   = mhd.named_layers['encoder_model/encoder_main/input']
-    z_mean      = mhd.named_layers['encoder_model/latent/z_log_var']
-    z_log_var   = mhd.named_layers['encoder_model/latent/z_mean']
+def cvae_loss(mhd):
+    input_img   = mhd.named_layers['encoder/encoder_main/input']
+    z_mean      = mhd.named_layers['encoder/latent/z_log_var']
+    z_log_var   = mhd.named_layers['encoder/latent/z_mean']
     outputs     = mhd.data["encoder"][S_MODEL]
 
     reconstruction_loss = keras.losses.MSE(input_img, outputs)      # Рассчитаем ошибку восстановления изображения - лоссы MSE
@@ -358,7 +358,6 @@ handmade_models_parts = to_dict(
     ##############
     hm1_enc = to_dict(
         model_class = Model,
-        loss = dummy_loss,
         vars = to_dict(
             # NOTE: may overridden via hyper params
             ldense_dim  = 2,
@@ -366,8 +365,6 @@ handmade_models_parts = to_dict(
             kernel_size = 3,
             noise_gen   = partial(noise_gen, latent_dim=2),
             cnn_activation = LeakyReLU,
-        ),
-        thd_kwargs = to_dict(
         ),
         template = to_dict(
             encoder_main = to_dict(
@@ -392,7 +389,6 @@ handmade_models_parts = to_dict(
     ##############
     hm1_dec = to_dict(
         model_class = Model,
-        loss = dummy_loss,
         vars = to_dict(
             # NOTE: may overridden via hyper params
             ldense_dim  = 2,
@@ -400,8 +396,6 @@ handmade_models_parts = to_dict(
             kernel_size = 3,
             noise_gen   = partial(noise_gen, latent_dim=2),
             cnn_activation = LeakyReLU,
-        ),
-        thd_kwargs = to_dict(
         ),
         template = to_dict(
             decoder_input = {**model_items['decoder_input']},
@@ -426,15 +420,12 @@ handmade_models_parts = to_dict(
 
     hm2_enc = to_dict(
         model_class = Model,
-        loss = dummy_loss,
         vars = to_dict(
             # NOTE: may overridden via hyper params
             ldense_dim  = 16,
             latent_dim  = 2,
             kernel_size = 3,
             cnn_act     = "relu",
-        ),
-        thd_kwargs = to_dict(
         ),
         template = to_dict(
             encoder_main = to_dict(
@@ -457,15 +448,12 @@ handmade_models_parts = to_dict(
     ##############
     hm2_dec = to_dict(
         model_class = Model,
-        loss = dummy_loss,
         vars = to_dict(
             # NOTE: may overridden via hyper params
             ldense_dim  = 16,
             latent_dim  = 2,
             kernel_size = 3,
             cnn_act     = "relu",
-        ),
-        thd_kwargs = to_dict(
         ),
         template = to_dict(
             decoder_input = {**model_items['decoder_input']},
@@ -484,76 +472,61 @@ handmade_models_parts = to_dict(
     ),
 
     ######################################
-    # Common part of CVAEC               #
+    # Common part of CVAE                #
     # (excluding encoder/decoder models) #
     ######################################
-    cvaec_common_part = to_dict(
-        ae_encoder = to_dict(
-            model_class ="encoder_model",
-            kwargs = to_dict(name = None),
-            inputs = [
-                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-            ],
-        ),
+    cvae_common_part = to_dict(
         ae = to_dict(
-            model_class = "decoder_model",
+            model_class = "decoder",
             kwargs = to_dict(name = None),
             inputs = [
-                ["ae_encoder",    S_MODEL,        2, ],
-                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ["encoder_i_",     S_MODEL, 2, ],
+                ["decoder", S_NAMED_LAYERS, "decoder_input/input_classes", ],
             ],
 
         ),
-        cvaec = to_dict(
+        cvae = to_dict(
             model_class = Model,
             inputs = [
-                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ["encoder", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ["decoder", S_NAMED_LAYERS, "decoder_input/input_classes", ],
             ],
             outputs = [
                 ["ae", S_MODEL, ]
             ],
         ),
-        z_meaner_model = to_dict(
+        z_meaner = to_dict(
             model_class = Model,
+            make_instance = True,
             inputs = [
-                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ["encoder", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
             ],
             outputs = [
-                ["encoder_model", S_NAMED_LAYERS, "latent/z_mean"],
-            ],
-        ),
-        z_meaner = to_dict(
-            model_class = "z_meaner_model",
-            kwargs = to_dict(name = None),
-            inputs = [
-                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ["encoder", S_NAMED_LAYERS, "latent/z_mean"],
             ],
         ),
         decoder_tr = to_dict(
-            model_class = "decoder_model",
+            model_class = "decoder",
             kwargs = to_dict(name = None),
             inputs = [
-                ["z_meaner",      S_MODEL, ],
-                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ["z_meaner_i_",    S_MODEL, ],
+                ["decoder", S_NAMED_LAYERS, "decoder_input/input_classes", ],
             ]
         ),
         tr_style = to_dict(
             model_class = Model,
             inputs = [
-                ["encoder_model", S_NAMED_LAYERS, "encoder_main/input", ],
-                ["encoder_model", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
-                ["decoder_model", S_NAMED_LAYERS, "decoder_input/input_classes", ],
+                ["encoder", S_NAMED_LAYERS, "encoder_main/input", ],
+                ["encoder", S_NAMED_LAYERS, "encoder_classes/input_classes", ],
+                ["decoder", S_NAMED_LAYERS, "decoder_input/input_classes", ],
             ],
             outputs = [
                 ["decoder_tr",    S_MODEL, ],
             ],
         ),
-        _output_ = "cvaec",
+        _output_ = "cvae",
     ),
 )
 
@@ -562,17 +535,18 @@ handmade_models = {}
 
 for prefix in ("hm1", "hm2"):
     handmade_models[f"{prefix}_full"] = to_dict(
-        loss = cvaec_loss,
+        loss = cvae_loss,
         vars = {},
         submodels = to_dict(
             _kind_ = S_COMPLEX,
-            encoder_model = to_dict(
+            encoder = to_dict(
                 model_template = copy.deepcopy(handmade_models_parts[f"{prefix}_enc"]),
+                make_instance = True,
             ),
-            decoder_model = to_dict(
+            decoder = to_dict(
                 model_template = copy.deepcopy(handmade_models_parts[f"{prefix}_dec"]),
             ),
-            **copy.deepcopy(handmade_models_parts["cvaec_common_part"]),
+            **copy.deepcopy(handmade_models_parts["cvae_common_part"]),
         ),
     )
 
@@ -678,6 +652,8 @@ if False:
 
     mhd.create()
 
+    mhd.data['encoder'][S_MODEL].summary()
+    mhd.data['decoder'][S_MODEL].summary()
     mhd.model.summary()
 
     a = 1 / 0
