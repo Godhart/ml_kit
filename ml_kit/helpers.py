@@ -35,6 +35,7 @@ S_OUTPUT = 'output'
 S_OUTPUTS = 'outputs'
 S_LAYER = 'layer'
 S_LAYERS = 'layers'
+S_MAKE_INSTANCE = 'make_instance'
 S_MODEL = 'model'
 S_MODEL_CLASS = 'model_class'
 S_MODEL_TEMPLATE = 'model_template'
@@ -573,62 +574,84 @@ def complex_model_create(
     # Create models
     data = {}
     for k, v in submodels.items():
-        if isinstance(k, str):
-            if k[:1] == "_" and k[-1:] == "_":
-                continue
+        while True:
 
-        model_kwargs = v.get(S_KWARGS, {})
-        if S_NAME not in model_kwargs:
-            model_kwargs[S_NAME] = k
+            if isinstance(k, str):
+                if k[:1] == "_" and k[-1:] == "_":
+                    break
 
-        if S_MODEL_TEMPLATE in v:
-
-            data[k] = simple_model_create(
-                v[S_MODEL_TEMPLATE]['model_class'],
-                v[S_MODEL_TEMPLATE]['template'],
-                model_kwargs,
-                **v[S_MODEL_TEMPLATE].get(S_VARS, {}))
-        elif S_MODEL_CLASS in v:
-
-            model_inputs = []
-            for ep_path in v[S_INPUTS]:
-                ep = data
-                for ep_item in ep_path:
-                    ep = ep[ep_item]
-                model_inputs.append(ep)
-
-            model_outputs = []
-            if S_OUTPUTS in v:
-                for ep_path in v[S_OUTPUTS]:
-                    ep = data
-                    for ep_item in ep_path:
-                        ep = ep[ep_item]
-                    model_outputs.append(ep)
-
-            args = []
-
-            args.append(model_inputs)
-
-            if len(model_outputs) > 0:
-                args.append(model_outputs)
-
-            if isinstance(v[S_MODEL_CLASS], str):
-                model_class = data[v[S_MODEL_CLASS]][S_MODEL]
-            else:
-                model_class = v[S_MODEL_CLASS]
+            model_kwargs = v.get(S_KWARGS, {})
+            if S_NAME not in model_kwargs:
+                model_kwargs[S_NAME] = k
 
             if S_NAME in model_kwargs and model_kwargs[S_NAME] is None:
                 del model_kwargs[S_NAME]
 
-            data[k] = {}
-            data[k][S_MODEL] = model_class(*args, **model_kwargs)
-            data[k][S_INPUTS] = model_inputs
-            data[k][S_OUTPUTS] = model_outputs
-            data[k][S_INPUTS_ORDER] = [item.name for item in model_inputs]
-            data[k][S_NAMED_LAYERS] = {}
-            data[k][S_DATA] = {}
-        else:
-            raise ValueError("No supported scheme for model found!")
+            if S_MODEL_TEMPLATE in v:
+
+                data[k] = simple_model_create(
+                    v[S_MODEL_TEMPLATE]['model_class'],
+                    v[S_MODEL_TEMPLATE]['template'],
+                    model_kwargs,
+                    **v[S_MODEL_TEMPLATE].get(S_VARS, {}))
+
+            elif S_MODEL_CLASS in v:
+
+                model_inputs = []
+                for ep_path in v[S_INPUTS]:
+                    ep = data
+                    for ep_item in ep_path:
+                        ep = ep[ep_item]
+                    model_inputs.append(ep)
+
+                model_outputs = []
+                if S_OUTPUTS in v:
+                    for ep_path in v[S_OUTPUTS]:
+                        ep = data
+                        for ep_item in ep_path:
+                            ep = ep[ep_item]
+                        model_outputs.append(ep)
+
+                args = []
+
+                args.append(model_inputs)
+
+                if len(model_outputs) > 0:
+                    args.append(model_outputs)
+
+                if isinstance(v[S_MODEL_CLASS], str):
+                    model_class = data[v[S_MODEL_CLASS]][S_MODEL]
+                else:
+                    model_class = v[S_MODEL_CLASS]
+
+                data[k] = {}
+                data[k][S_MODEL] = model_class(*args, **model_kwargs)
+                data[k][S_INPUTS] = model_inputs
+                data[k][S_OUTPUTS] = model_outputs
+                data[k][S_INPUTS_ORDER] = [item.name for item in model_inputs]
+                data[k][S_NAMED_LAYERS] = {}
+                data[k][S_DATA] = {}
+
+            else:
+                raise ValueError("No supported scheme for model found!")
+
+            # Recurse if necessary
+            if v.get(S_MAKE_INSTANCE, False) is not True:
+                break
+            else:
+                # Make default instance of this model
+                # (will use `if S_MODEL_CLASS in v` code branch below)
+
+                v = {
+                    S_MODEL_CLASS: k,
+                    S_KWARGS: to_dict(name = None),
+                }
+                v[S_INPUTS] = [
+                    [k, S_INPUTS, i] for i in range(len(data[k][S_INPUTS]))
+                ]
+
+                k = f"{k}_i_"
+
 
     output_model = data[submodels[f"_{S_OUTPUT}_"]]
     named_layers = {}
