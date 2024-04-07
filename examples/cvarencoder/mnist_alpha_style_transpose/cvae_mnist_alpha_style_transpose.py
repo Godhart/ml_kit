@@ -203,10 +203,10 @@ ENV[ENV__JUPYTER] = False
 ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_14_pro_1a"
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-4)] # TODO: change learning rate ?
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = None
-ENV[ENV__TRAIN__DEFAULT_METRICS]         = []
+ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_MSE]
 ENV[ENV__TRAIN__DEFAULT_BATCH_SIZE]      = 128
 ENV[ENV__TRAIN__DEFAULT_EPOCHS]          = 2
-ENV[ENV__TRAIN__DEFAULT_TARGET]          = {}
+ENV[ENV__TRAIN__DEFAULT_TARGET]          = {S_MSE: 0.0}
 ENV[ENV__TRAIN__DEFAULT_SAVE_STEP]       = 5
 ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
@@ -241,7 +241,7 @@ def cvae_loss(mhd):
     input_img   = mhd.named_layers['encoder/encoder_main/input']
     z_mean      = mhd.named_layers['encoder/latent/z_log_var']
     z_log_var   = mhd.named_layers['encoder/latent/z_mean']
-    outputs     = mhd.data["encoder"][S_MODEL]
+    outputs     = mhd.data["ae"][S_MODEL]
 
     reconstruction_loss = keras.losses.MSE(input_img, outputs)      # Рассчитаем ошибку восстановления изображения - лоссы MSE
     reconstruction_loss *= mult(x_train.shape[1:])                  # Уберем нормировку MSE
@@ -459,7 +459,7 @@ handmade_models_parts = to_dict(
             decoder_input = {**model_items['decoder_input']},
             decoder_cnn = to_dict(
                 output = True,
-                parent = "decoder_input",
+                parents = ["decoder_input"],
                 layers = [
                     layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
                     layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
@@ -537,6 +537,10 @@ for prefix in ("hm1", "hm2"):
     handmade_models[f"{prefix}_full"] = to_dict(
         loss = cvae_loss,
         vars = {},
+        mhd_kwargs = to_dict(
+            load_weights_only = True
+        ),
+        model_class = None,
         submodels = to_dict(
             _kind_ = S_COMPLEX,
             encoder = to_dict(
@@ -737,10 +741,81 @@ tabs_objs.keys()
 
 ## Подготовка данных, обучение, вывод результатов
 
-###
-# Подготовка данных, обучение, вывод результатов
+# Подготовка информации для контролируемого разбиения данных
+# В данном случае данные не будут разделяться на выборки
+# Будет только использоваться перемешивание
+data_split_provider = TrainDataProvider(
+    x_train = [i for i in range(int(x_train.shape[0]))], # индексы элементов исходных данных,
+                            # которые будут перемешаны и разделены
+    y_train = [0]*int(x_train.shape[0]), # актуальные данные для y_train в нашем случае не требуются
 
-def prepare(    model_name,
+    x_val   = 0.1,          # число данных в проверочной выборке
+    y_val   = None,
+
+    x_test  = [],           # тестовая выборка не будет использоваться
+    y_test  = [],
+)
+
+# В словаре хранятся индексы элементов в исходных данных для каждой из подвыборок
+data_split = to_dict(
+    train =  data_split_provider.x_train + data_split_provider.x_val,
+    # восполним обучающую выборку, в качестве проверочной далее в коде будем использовать тестовую
+)
+
+# Проинициализировать словарь входных данных (на основании ветвей модели, помеченных как вход)
+train_data = {}
+
+y_train_dummy = [None]*int(x_train.shape[0])
+y_val_dummy   = [None]*int(x_test.shape[0])
+y_test_dummy  = [None]*int(x_test.shape[0])
+
+train_data["images_input"] = TrainDataProvider(
+    x_train = x_train,
+    y_train = y_train_dummy,
+    x_val   = x_test,
+    y_val   = y_val_dummy,
+    x_test  = x_test,
+    y_test  = y_test_dummy,
+    split   = data_split,
+    split_y = True,
+)
+
+train_data["classes_enc"] = TrainDataProvider(
+    x_train = y_train_ohe,
+    y_train = y_train_dummy,
+    x_val   = y_test_ohe,
+    y_val   = y_test_dummy,
+    x_test  = y_test_ohe,
+    y_test  = y_test_dummy,
+    split   = data_split,
+    split_y = True,
+)
+
+train_data["classes_dec"] = TrainDataProvider(
+    x_train = y_train_ohe,
+    y_train = y_train_dummy,
+    x_val   = y_test_ohe,
+    y_val   = y_test_dummy,
+    x_test  = y_test_ohe,
+    y_test  = y_test_dummy,
+    split   = data_split,
+    split_y = True,
+)
+
+train_data["images_output"] = TrainDataProvider(
+    x_train = x_train,
+    y_train = x_train,
+    x_val   = x_test,
+    y_val   = x_test,
+    x_test  = x_test,
+    y_test  = x_test,
+    split   = data_split,
+    split_y = True,
+)
+
+
+def prepare(
+    model_name,
     model_data,
     hp_name,
     hp,
@@ -755,21 +830,23 @@ def prepare(    model_name,
         tab_id, _, _ = get_tab_run(v, model_name, model_data, hp_name, hp)
         hp['tabs'].append(tab_id)
 
-    # TODO: include labels
-    data_provider = TrainDataProvider(
-        x_train = x_train,
-        y_train = x_train,  # NOTE: x_train is on purpose since it's autoencoder
+    dp_kwargs = {}
+    for attr in ("x_train", "x_val", "x_test"):
+        dp_kwargs[attr] = {
+            "encoder_main/input"            : getattr(train_data["images_input"], attr),
+            "encoder_classes/input_classes" : getattr(train_data["classes_enc"],  attr),
+            "decoder_input/input_classes"   : getattr(train_data["classes_dec"],  attr),
+        }
+    for attr in ("y_train", "y_val", "y_test"):
+        dp_kwargs[attr] = getattr(train_data["images_output"], attr)
 
-        x_val   = x_test,
-        y_val   = x_test,   # NOTE: x_test is on purpose since it's autoencoder
-
-        x_test  = x_test,
-        y_test  = x_test,   # NOTE: x_test is on purpose since it's autoencoder
-    )
-
-    # TODO: data provider for hidden layer
+    data_provider = TrainDataProvider(**dp_kwargs)
 
     return data_provider
+
+
+def on_model_update(thd: TrainHandler):
+    thd.mhd.data_provider.x_order = thd.mhd.inputs_order
 
 
 score = {}
@@ -897,6 +974,7 @@ bp.train_routine(
     preparation_call=prepare,
     get_tab_run_call=get_tab_run,
     print_to_tab_call=print_to_tab,
+    on_model_update_call=on_model_update,
 )
 
 score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: [
