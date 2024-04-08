@@ -133,6 +133,8 @@ from sklearn.metrics import mean_squared_error
 
 from functools import partial
 
+import math
+
 # ---------------------------------------------------------------------------- #
 
 ## Подготовительные операции
@@ -200,7 +202,7 @@ ENV[ENV__JUPYTER] = False
 # ---------------------------------------------------------------------------- #
 
 # Перегрузка окружения под текущую задачу
-ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_14_pro_1a"
+ENV[ENV__TRAIN__DEFAULT_DATA_PATH]       = "lesson_14_pro_1"+['b','a'][DATA==S_DIGS]
 ENV[ENV__TRAIN__DEFAULT_OPTIMIZER]       = [Adam, [], to_dict(learning_rate=1e-4)] # TODO: change learning rate ?
 ENV[ENV__TRAIN__DEFAULT_LOSS]            = None
 ENV[ENV__TRAIN__DEFAULT_METRICS]         = [S_MSE]
@@ -215,10 +217,10 @@ ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]    = None
 
 # Доподготовка данных
 
-num_classes = int(np.max(y_train)) + 1
+NUM_CLASSES = int(np.max(y_train)) + 1
 
-y_train_ohe = keras.utils.to_categorical(y_train, num_classes)
-y_test_ohe  = keras.utils.to_categorical(y_test,  num_classes)
+y_train_ohe = keras.utils.to_categorical(y_train, NUM_CLASSES)
+y_test_ohe  = keras.utils.to_categorical(y_test,  NUM_CLASSES)
 
 # ---------------------------------------------------------------------------- #
 
@@ -237,6 +239,7 @@ def noise_gen(args, latent_dim):
     return K.exp(z_log_var / 2) * N + z_mean
 
 
+# Функция потерь с учётом данных скрытого пространства
 def cvae_loss(mhd):
     input_img   = mhd.named_layers['encoder/encoder_main/input']
     z_mean      = mhd.named_layers['encoder/latent/z_log_var']
@@ -251,11 +254,112 @@ def cvae_loss(mhd):
     return result
 
 
+# Пустышка функции потерь
+# (использовать там где формально параметр требуется, но он влияния не оказывает)
 def dummy_loss(mhd):
-    return []
+    return 0
 
 
-# Созданим класс для генерации случайных чисел Sampling
+# Генератор выходных изображений из точек скрытого пространства
+def lat2img(
+    model,
+    class_n,
+    total_samples,
+    classes_count = None,   # TODO: get from model
+    latent_dim    = None,   # TODO: get from model
+):
+    # Общий размер картинки
+    # (сторона квадрата способного вместить в себя total_samples)
+    axis_size = int(math.ceil(math.sqrt(total_samples)))
+    # Метка требуемого класса в кодировке OHE
+    input_lbl = np.zeros((1, classes_count))
+    input_lbl[0, class_n] = 1
+    # Заготовим общую картинку
+    plt.figure(figsize=(axis_size, axis_size))
+    # Переменная для перебора точек в скрытом пространстве
+    h = np.zeros((1, latent_dim))
+    # Исходное положение точки - "отрицательный угол" в скрытом пространстве
+    h.fill(-1)
+
+    # Шаг точки в скрытом пространстве
+    # (такой чтобы за нужное число сэмплов перебрать пространство полностью)
+    latent_step = 2. / math.pow(total_samples, 1/latent_dim)
+    # NOTE: 2 т.к. диапазон перебора по каждому измерению [-1:1]
+
+    for i in range(total_samples):
+        # Заготовим отдельную картинку для цифры
+        ax = plt.subplot(axis_size, axis_size, i+1)
+        # Генерируем изображение, соответствующее точке скрытого пространства и требуемому классу
+        img = model.predict([h, input_lbl])
+        # Вывод изображения
+        plt.imshow(img.squeeze(), cmap='gray')
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+        # Рассчёт следующей точки в скрытом пространстве
+        for j in range(latent_dim):
+            h[0][j] += latent_step
+            if h[0][j] <= 1:
+                break
+            else:
+                h[0][j] -= 2
+    plt.show()
+
+
+# Функция для оценки переноса стиля
+def img2img(
+    model,
+    imgs,
+    labels,
+    direction     = S_COLS,
+    classes_count = None,  # TODO: get from model
+):
+    # Общий размер картинки
+    # (сторона квадрата способного вместить в себя total_samples)
+    if direction == S_COLS:
+        h_size = len(imgs)
+        v_size = classes_count + 1
+        step = h_size
+    else:
+        v_size = len(imgs)
+        h_size = classes_count + 1
+        step = 1
+    # Заготовим общую картинку
+    plt.figure(figsize=(v_size, h_size))
+
+    for i in range(len(imgs)):
+        if direction == S_COLS:
+            img_idx = 1+i
+        else:
+            img_idx = 1+i*(classes_count+1)
+
+        # Показать исходное изображение
+        ax = plt.subplot(v_size, h_size, img_idx)
+        plt.imshow(imgs[i].squeeze(), cmap='gray')
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+
+        # Показать производные от него для других классов
+        for j in range(classes_count):
+
+            # Метка требуемого класса в кодировке OHE
+            output_lbl = np.zeros((1, classes_count))
+            output_lbl[0, j] = 1
+
+            # Генерируем изображение, соответствующее по стилю входному изображению и требуемому классу
+            img = model.predict([imgs[i:i+1,], labels[i:i+1,], output_lbl])
+
+            # Заготовим отдельную картинку для изображения
+            img_idx += step
+            ax = plt.subplot(v_size, h_size, img_idx)
+            # Вывод изображения
+            plt.imshow(img.squeeze(), cmap='gray')
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+    plt.show()
+
+
+# Создадим класс для генерации случайных чисел Sampling
 # (используется в модели hm2)
 class Sampling(layers.Layer):
     """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
@@ -305,7 +409,7 @@ model_items = to_dict(
     encoder_classes = to_dict(
         input = True,
         layers = [
-            layer_template(Input,   num_classes, name='input_classes'),
+            layer_template(Input,   NUM_CLASSES, name='input_classes'),
         ],
     ),
     encoder_concat = to_dict(
@@ -341,7 +445,7 @@ model_items = to_dict(
         input = True,
         layers = [
             layer_template(Input,  shape=("$latent_dim", ), name="input_latent",    _input_ = 0),
-            layer_template(Input,  shape=(num_classes, ),   name="input_classes",   _input_ = 1),
+            layer_template(Input,  shape=(NUM_CLASSES, ),   name="input_classes",   _input_ = 1),
             layer_template(concatenate, ["$input_latent",   "$input_classes",],     _parent_=None, name=None),
         ],
     ),
@@ -483,7 +587,6 @@ handmade_models_parts = to_dict(
                 ["encoder_i_",     S_MODEL, 2, ],
                 ["decoder", S_NAMED_LAYERS, "decoder_input/input_classes", ],
             ],
-
         ),
         cvae = to_dict(
             model_class = Model,
@@ -536,11 +639,15 @@ handmade_models = {}
 for prefix in ("hm1", "hm2"):
     handmade_models[f"{prefix}_full"] = to_dict(
         loss = cvae_loss,
-        vars = {},
         mhd_kwargs = to_dict(
             load_weights_only = True
         ),
         model_class = None,
+        vars = to_dict(
+            # Synchronize submodel's common vars
+            latent_dim  = 2,
+            kernel_size = 3,
+        ),
         submodels = to_dict(
             _kind_ = S_COMPLEX,
             encoder = to_dict(
@@ -671,7 +778,7 @@ if False:
 # Гиперпараметры
 
 hp_defaults = to_dict(
-        tabs=['learn', 'XvsY', 'img2img'],
+        tabs=['learn', 'XvsY', 'lat2img', 'img2img'],
 )
 
 data_common_vars=to_dict(
@@ -851,6 +958,27 @@ def on_model_update(thd: TrainHandler):
 
 score = {}
 
+
+def plot_learn(
+    model_name,
+    model_data,
+    hp_name,
+    hp,
+    run_name,
+    mhd,
+    thd,
+    tab_group,
+    tab_name,
+    last_metrics,
+    best_metrics,
+):
+    mhd.context.report_to_screen()
+    mhd.model.summary()
+    mhd.data["encoder"][S_MODEL].summary()
+    mhd.data["decoder"][S_MODEL].summary()
+    a = 1
+
+
 def plot_XvsY(
     model_name,
     model_data,
@@ -877,6 +1005,52 @@ def plot_XvsY(
     plot_images(imgs, 2, 5, ordering=S_COLS)
     plt.show()
 
+
+def plot_lat2img(
+    model_name,
+    model_data,
+    hp_name,
+    hp,
+    run_name,
+    mhd,
+    thd,
+    tab_group,
+    tab_name,
+    last_metrics,
+    best_metrics,
+):
+    for i in range(NUM_CLASSES):
+        lat2img(
+            mhd.data["decoder"][S_MODEL],
+            i,
+            100,
+            NUM_CLASSES,
+            hp['model_vars']['latent_dim'],
+        )
+
+
+def plot_img2img(
+    model_name,
+    model_data,
+    hp_name,
+    hp,
+    run_name,
+    mhd,
+    thd,
+    tab_group,
+    tab_name,
+    last_metrics,
+    best_metrics,
+):
+    img2img(
+        mhd.data["tr_style"][S_MODEL],
+        x_train[:10],
+        y_train_ohe[:10],
+        S_COLS,
+        NUM_CLASSES
+    )
+
+
 def print_to_tab(
     model_name,
     model_data,
@@ -893,9 +1067,13 @@ def print_to_tab(
     tab_print_map = {}
     for tab_id in hp['tabs']:
         if 'learn' in tab_id:
-            tab_print_map[tab_id] = bp.print_to_tab_learn
+            tab_print_map[tab_id] = plot_learn
         elif 'XvsY' in tab_id:
             tab_print_map[tab_id] = plot_XvsY
+        elif 'img2img' in tab_id:
+            tab_print_map[tab_id] = plot_img2img
+        elif 'lat2img' in tab_id:
+            tab_print_map[tab_id] = plot_lat2img
 
     if 'learn' in tab_group:
         train_mse = mhd.context.get_metric_value(S_MSE)
