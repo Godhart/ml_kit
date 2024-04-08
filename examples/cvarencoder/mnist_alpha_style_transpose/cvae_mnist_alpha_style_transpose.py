@@ -1,4 +1,6 @@
-# Этот пример в google_colab можно посмотреть по ссылке https://colab.research.google.com/drive/1BYpocfurl9kF8I2dR4J001FGxWARahI9
+# Этот пример в google_colab можно посмотреть по ссылке
+# для букв - https://colab.research.google.com/drive/1S5G9ENkY3JbzJomr8fV16EUfMdAEvz7a
+# для цифр - https://colab.research.google.com/drive/1Tbneu8h_0UjB0SiGn4ab3XEUE9o638lA
 
 # Возьмите из ноутбука по практическому занятия "Автокодировщики" сверточный вариационный энкодер или напишите свой и обучите его на датасете Emnist letters.
 
@@ -39,7 +41,7 @@ import keras.backend as K
 # Подключим датасет рукописных букв
 S_DIGS = "DIGS"
 S_ALPHAS = "ALPHAS"
-DATA = S_DIGS
+DATA = S_ALPHAS
 
 if DATA == S_DIGS:
     # Для загрузки данных
@@ -55,10 +57,12 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # От tensorflow будет получ
 
 # ---------------------------------------------------------------------------- #
 
+# Получим входные данные
 if DATA == S_DIGS:
     (xs_train, y_train), (xs_test, y_test) = mnist.load_data()
 elif DATA == S_ALPHAS:
     # Скачаем обучающую выборку
+    # a = emnist.list_datasets()
     xs_train, y_train = extract_training_samples('letters')
 
     # Скачаем тестовую выборку
