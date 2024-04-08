@@ -565,7 +565,8 @@ def simple_model_create(model_class, templates, model_kwargs=None, **variables):
             inputs_order.append(mi.name)
 
     return {S_MODEL: model, S_INPUTS_ORDER: inputs_order, S_NAMED_LAYERS: named_layers,
-            S_INPUTS: model_inputs, S_OUTPUTS: model_outputs, S_DATA: {}}
+            S_INPUTS: model_inputs, S_OUTPUTS: model_outputs, S_DATA: {},
+            S_VARS: {**variables}, 'model_kwargs': {**model_kwargs}}
 
 
 def complex_model_create(
@@ -593,7 +594,8 @@ def complex_model_create(
                     v[S_MODEL_TEMPLATE]['model_class'],
                     v[S_MODEL_TEMPLATE]['template'],
                     model_kwargs,
-                    **v[S_MODEL_TEMPLATE].get(S_VARS, {}))
+                    **{**v[S_MODEL_TEMPLATE].get(S_VARS, {}), **variables}
+                )
 
             elif S_MODEL_CLASS in v:
 
@@ -667,6 +669,7 @@ def complex_model_create(
     result = {**output_model}
     result[S_NAMED_LAYERS] = named_layers
     result[S_DATA] = data
+    result[S_VARS] = {**variables}
     return result
 
 
