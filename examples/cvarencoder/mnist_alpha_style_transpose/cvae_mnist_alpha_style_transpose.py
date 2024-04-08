@@ -41,7 +41,7 @@ import keras.backend as K
 # Подключим датасет рукописных букв
 S_DIGS = "DIGS"
 S_ALPHAS = "ALPHAS"
-DATA = S_ALPHAS
+DATA = S_DIGS
 
 if DATA == S_DIGS:
     # Для загрузки данных
@@ -181,7 +181,7 @@ TRAIN_INCLUDE = None  # Включать всё
 TRAIN_EXCLUDE = None  # Ничего не исключать
 
 # TRAIN_INCLUDE = [r"dns3b.*"]
-# TRAIN_EXCLUDE = [r"cdns.*"]
+TRAIN_EXCLUDE = [r"hm(3|4)_(.*?)--ld.*"]
 
 def use_model(model_name):
     if TRAIN_EXCLUDE is not None:
@@ -193,6 +193,20 @@ def use_model(model_name):
     else:
         for item in TRAIN_INCLUDE:
             if re.match(item, model_name) is not None:
+                return True
+        return False
+
+
+def use_model_hp(model_name, model_data, hp_name, hp, run_name):
+    if TRAIN_EXCLUDE is not None:
+        for item in TRAIN_EXCLUDE:
+            if re.match(item, run_name) is not None:
+                return False
+    if TRAIN_INCLUDE is None:
+        return True
+    else:
+        for item in TRAIN_INCLUDE:
+            if re.match(item, run_name) is not None:
                 return True
         return False
 
@@ -577,6 +591,142 @@ handmade_models_parts = to_dict(
                 ],
             ),
         ),
+
+        ##############
+        # Encoder #3 #
+        ##############
+        hm3_enc = to_dict(
+            model_class = Model,
+            vars = to_dict(
+                # NOTE: may overridden via hyper params
+                ldense_dim  = 2,
+                latent_dim  = 2,
+                kernel_size = 3,
+                noise_gen   = partial(noise_gen, latent_dim=2),
+                cnn_activation = LeakyReLU,
+            ),
+            template = to_dict(
+                encoder_main = to_dict(
+                    input  = True,
+                    layers = [
+                        layer_template(Input,   input_shape, name="input"),
+                        *enc_cnn_layer("enc_la", 1, 32, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 1, 32, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_la", 2, 64, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 2, 64, "$kernel_size", 2),
+                        *enc_cnn_layer("enc_la", 3, 64, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 3, 64, "$kernel_size", 2),
+                        *enc_cnn_layer("enc_la", 4, 64, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 4, 64, "$kernel_size", 1),
+                        layer_template(Flatten, name="enc_cnn_flat"),
+                    ],
+                ),
+                encoder_classes = {**model_items['encoder_classes']},
+                encoder_concat  = {**model_items['encoder_concat']},
+                latent          = {**model_items['latent_lambda']},
+            ),
+        ),
+
+        ##############
+        # Decoder #3 #
+        ##############
+        hm3_dec = to_dict(
+            model_class = Model,
+            vars = to_dict(
+                # NOTE: may overridden via hyper params
+                ldense_dim  = 2,
+                latent_dim  = 2,
+                kernel_size = 3,
+                noise_gen   = partial(noise_gen, latent_dim=2),
+                cnn_activation = LeakyReLU,
+            ),
+            template = to_dict(
+                decoder_input = {**model_items['decoder_input']},
+                decoder_cnn = to_dict(
+                    output = True,
+                    parents = ["decoder_input"],
+                    layers = [
+                        layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                        layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
+                        *dec_cnn_layer("dec_la", 3, 64,     "$kernel_size", 1),
+                        *dec_cnn_layer("dec_lb", 3, 64,     "$kernel_size", 1),
+                        *dec_cnn_layer("dec_la", 2, 64,     "$kernel_size", 2),
+                        *dec_cnn_layer("dec_lb", 2, 64,     "$kernel_size", 1),
+                        *dec_cnn_layer("dec_la", 1, 32,     "$kernel_size", 2),
+                        *dec_cnn_layer("dec_lb", 1, 32,     "$kernel_size", 1),
+                        layer_template(Conv2DTranspose, 1,  "$kernel_size", padding="same", activation="sigmoid", name="output"),
+                    ],
+                ),
+            ),
+        ),
+
+        ##############
+        # Encoder #4 #
+        ##############
+        hm4_enc = to_dict(
+            model_class = Model,
+            vars = to_dict(
+                # NOTE: may overridden via hyper params
+                ldense_dim  = 2,
+                latent_dim  = 2,
+                kernel_size = 3,
+                noise_gen   = partial(noise_gen, latent_dim=2),
+                cnn_activation = LeakyReLU,
+            ),
+            template = to_dict(
+                encoder_main = to_dict(
+                    input  = True,
+                    layers = [
+                        layer_template(Input,   input_shape, name="input"),
+                        *enc_cnn_layer("enc_la", 1, 64,  "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 1, 64,  "$kernel_size", 1),
+                        *enc_cnn_layer("enc_la", 2, 128, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 2, 128, "$kernel_size", 2),
+                        *enc_cnn_layer("enc_la", 3, 128, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 3, 128, "$kernel_size", 2),
+                        *enc_cnn_layer("enc_la", 4, 128, "$kernel_size", 1),
+                        *enc_cnn_layer("enc_lb", 4, 128, "$kernel_size", 1),
+                        layer_template(Flatten, name="enc_cnn_flat"),
+                    ],
+                ),
+                encoder_classes = {**model_items['encoder_classes']},
+                encoder_concat  = {**model_items['encoder_concat']},
+                latent          = {**model_items['latent_lambda']},
+            ),
+        ),
+
+        ##############
+        # Decoder #4 #
+        ##############
+        hm4_dec = to_dict(
+            model_class = Model,
+            vars = to_dict(
+                # NOTE: may overridden via hyper params
+                ldense_dim  = 2,
+                latent_dim  = 2,
+                kernel_size = 3,
+                noise_gen   = partial(noise_gen, latent_dim=2),
+                cnn_activation = LeakyReLU,
+            ),
+            template = to_dict(
+                decoder_input = {**model_items['decoder_input']},
+                decoder_cnn = to_dict(
+                    output = True,
+                    parents = ["decoder_input"],
+                    layers = [
+                        layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                        layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
+                        *dec_cnn_layer("dec_la", 3, 128,    "$kernel_size", 1),
+                        *dec_cnn_layer("dec_lb", 3, 128,    "$kernel_size", 1),
+                        *dec_cnn_layer("dec_la", 2, 128,    "$kernel_size", 2),
+                        *dec_cnn_layer("dec_lb", 2, 128,    "$kernel_size", 1),
+                        *dec_cnn_layer("dec_la", 1, 64,     "$kernel_size", 2),
+                        *dec_cnn_layer("dec_lb", 1, 64,     "$kernel_size", 1),
+                        layer_template(Conv2DTranspose, 1,  "$kernel_size", padding="same", activation="sigmoid", name="output"),
+                    ],
+                ),
+            ),
+        ),
     ),
 
     ######################################
@@ -640,7 +790,7 @@ handmade_models_parts = to_dict(
 
 handmade_models = {}
 
-for prefix in ("hm1", "hm2"):
+for prefix in ("hm1", "hm2", "hm3", "hm4"):
     handmade_models[f"{prefix}_full"] = to_dict(
         loss = cvae_loss,
         mhd_kwargs = to_dict(
@@ -651,6 +801,7 @@ for prefix in ("hm1", "hm2"):
             # Synchronize submodel's common vars
             latent_dim  = 2,
             kernel_size = 3,
+            noise_gen   = partial(noise_gen, latent_dim=2),
         ),
         submodels = to_dict(
             _kind_ = S_COMPLEX,
@@ -809,10 +960,14 @@ hp_template = to_dict(
 
 hyper_params_sets = {}
 
-if True:
+for name, custom_vars in (
+    ("ld3", to_dict(latent_dim = 3, noise_gen = partial(noise_gen, latent_dim=3))),
+    ("ld4", to_dict(latent_dim = 4, noise_gen = partial(noise_gen, latent_dim=4))),
+    ("def", {}),
+):
     hp =copy.deepcopy(hp_template)
-    hyper_params_sets[f"def"] = hp
-
+    hp['model_vars'] = {**hp['model_vars'], **custom_vars}
+    hyper_params_sets[name] = hp
 # ---------------------------------------------------------------------------- #
 
 ## Вспомогательный код для вывода данных
@@ -1157,6 +1312,7 @@ bp.train_routine(
     get_tab_run_call=get_tab_run,
     print_to_tab_call=print_to_tab,
     on_model_update_call=on_model_update,
+    use_model_hp=use_model_hp,
 )
 
 score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: [
