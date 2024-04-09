@@ -19,6 +19,7 @@ if STANDALONE:
 from pathlib import Path
 import copy
 import os
+import gc
 import shutil
 import pickle
 import yaml
@@ -50,6 +51,10 @@ ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT = "ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT"
 ENV__TRAIN__RANDOM_SEED_DEFAULT = "ENV__TRAIN__RANDOM_SEED_DEFAULT"
 ENV[ENV__TRAIN__SPLIT_SHUFFLE_DEFAULT] = True
 ENV[ENV__TRAIN__RANDOM_SEED_DEFAULT] = 1
+
+ENV__TRAIN__COLLECT_GARBAGE         = "ENV__TRAIN__COLLECT_GARBAGE"
+ENV[ENV__TRAIN__COLLECT_GARBAGE]    = True
+
 
 def connect_gdrive():
     from google.colab import drive
@@ -1480,6 +1485,9 @@ class TrainHandler:
                     self.mhd.update_data()
                     self.save(S_REGULAR)
                     next_save += save_step
+
+                if ENV[ENV__TRAIN__COLLECT_GARBAGE]:
+                    gc.collect()
 
                 if self.is_enough(target):
                     # TODO: check metrics on test_data
