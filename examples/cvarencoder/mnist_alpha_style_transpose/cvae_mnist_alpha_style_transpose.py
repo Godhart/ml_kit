@@ -591,140 +591,140 @@ handmade_models_parts = to_dict(
                 ],
             ),
         ),
+    ),
 
-        ##############
-        # Encoder #3 #
-        ##############
-        hm3_enc = to_dict(
-            model_class = Model,
-            vars = to_dict(
-                # NOTE: may overridden via hyper params
-                ldense_dim  = 2,
-                latent_dim  = 2,
-                kernel_size = 3,
-                noise_gen   = partial(noise_gen, latent_dim=2),
-                cnn_activation = LeakyReLU,
+    ##############
+    # Encoder #3 #
+    ##############
+    hm3_enc = to_dict(
+        model_class = Model,
+        vars = to_dict(
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 2,
+            latent_dim  = 2,
+            kernel_size = 3,
+            noise_gen   = partial(noise_gen, latent_dim=2),
+            cnn_activation = LeakyReLU,
+        ),
+        template = to_dict(
+            encoder_main = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(Input,   input_shape, name="input"),
+                    *enc_cnn_layer("enc_la", 1, 32, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 1, 32, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_la", 2, 64, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 2, 64, "$kernel_size", 2),
+                    *enc_cnn_layer("enc_la", 3, 64, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 3, 64, "$kernel_size", 2),
+                    *enc_cnn_layer("enc_la", 4, 64, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 4, 64, "$kernel_size", 1),
+                    layer_template(Flatten, name="enc_cnn_flat"),
+                ],
             ),
-            template = to_dict(
-                encoder_main = to_dict(
-                    input  = True,
-                    layers = [
-                        layer_template(Input,   input_shape, name="input"),
-                        *enc_cnn_layer("enc_la", 1, 32, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 1, 32, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_la", 2, 64, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 2, 64, "$kernel_size", 2),
-                        *enc_cnn_layer("enc_la", 3, 64, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 3, 64, "$kernel_size", 2),
-                        *enc_cnn_layer("enc_la", 4, 64, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 4, 64, "$kernel_size", 1),
-                        layer_template(Flatten, name="enc_cnn_flat"),
-                    ],
-                ),
-                encoder_classes = {**model_items['encoder_classes']},
-                encoder_concat  = {**model_items['encoder_concat']},
-                latent          = {**model_items['latent_lambda']},
+            encoder_classes = {**model_items['encoder_classes']},
+            encoder_concat  = {**model_items['encoder_concat']},
+            latent          = {**model_items['latent_lambda']},
+        ),
+    ),
+
+    ##############
+    # Decoder #3 #
+    ##############
+    hm3_dec = to_dict(
+        model_class = Model,
+        vars = to_dict(
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 2,
+            latent_dim  = 2,
+            kernel_size = 3,
+            noise_gen   = partial(noise_gen, latent_dim=2),
+            cnn_activation = LeakyReLU,
+        ),
+        template = to_dict(
+            decoder_input = {**model_items['decoder_input']},
+            decoder_cnn = to_dict(
+                output = True,
+                parents = ["decoder_input"],
+                layers = [
+                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
+                    *dec_cnn_layer("dec_la", 3, 64,     "$kernel_size", 1),
+                    *dec_cnn_layer("dec_lb", 3, 64,     "$kernel_size", 1),
+                    *dec_cnn_layer("dec_la", 2, 64,     "$kernel_size", 2),
+                    *dec_cnn_layer("dec_lb", 2, 64,     "$kernel_size", 1),
+                    *dec_cnn_layer("dec_la", 1, 32,     "$kernel_size", 2),
+                    *dec_cnn_layer("dec_lb", 1, 32,     "$kernel_size", 1),
+                    layer_template(Conv2DTranspose, 1,  "$kernel_size", padding="same", activation="sigmoid", name="output"),
+                ],
             ),
         ),
+    ),
 
-        ##############
-        # Decoder #3 #
-        ##############
-        hm3_dec = to_dict(
-            model_class = Model,
-            vars = to_dict(
-                # NOTE: may overridden via hyper params
-                ldense_dim  = 2,
-                latent_dim  = 2,
-                kernel_size = 3,
-                noise_gen   = partial(noise_gen, latent_dim=2),
-                cnn_activation = LeakyReLU,
-            ),
-            template = to_dict(
-                decoder_input = {**model_items['decoder_input']},
-                decoder_cnn = to_dict(
-                    output = True,
-                    parents = ["decoder_input"],
-                    layers = [
-                        layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
-                        layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
-                        *dec_cnn_layer("dec_la", 3, 64,     "$kernel_size", 1),
-                        *dec_cnn_layer("dec_lb", 3, 64,     "$kernel_size", 1),
-                        *dec_cnn_layer("dec_la", 2, 64,     "$kernel_size", 2),
-                        *dec_cnn_layer("dec_lb", 2, 64,     "$kernel_size", 1),
-                        *dec_cnn_layer("dec_la", 1, 32,     "$kernel_size", 2),
-                        *dec_cnn_layer("dec_lb", 1, 32,     "$kernel_size", 1),
-                        layer_template(Conv2DTranspose, 1,  "$kernel_size", padding="same", activation="sigmoid", name="output"),
-                    ],
-                ),
-            ),
+    ##############
+    # Encoder #4 #
+    ##############
+    hm4_enc = to_dict(
+        model_class = Model,
+        vars = to_dict(
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 2,
+            latent_dim  = 2,
+            kernel_size = 3,
+            noise_gen   = partial(noise_gen, latent_dim=2),
+            cnn_activation = LeakyReLU,
         ),
-
-        ##############
-        # Encoder #4 #
-        ##############
-        hm4_enc = to_dict(
-            model_class = Model,
-            vars = to_dict(
-                # NOTE: may overridden via hyper params
-                ldense_dim  = 2,
-                latent_dim  = 2,
-                kernel_size = 3,
-                noise_gen   = partial(noise_gen, latent_dim=2),
-                cnn_activation = LeakyReLU,
+        template = to_dict(
+            encoder_main = to_dict(
+                input  = True,
+                layers = [
+                    layer_template(Input,   input_shape, name="input"),
+                    *enc_cnn_layer("enc_la", 1, 64,  "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 1, 64,  "$kernel_size", 1),
+                    *enc_cnn_layer("enc_la", 2, 128, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 2, 128, "$kernel_size", 2),
+                    *enc_cnn_layer("enc_la", 3, 128, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 3, 128, "$kernel_size", 2),
+                    *enc_cnn_layer("enc_la", 4, 128, "$kernel_size", 1),
+                    *enc_cnn_layer("enc_lb", 4, 128, "$kernel_size", 1),
+                    layer_template(Flatten, name="enc_cnn_flat"),
+                ],
             ),
-            template = to_dict(
-                encoder_main = to_dict(
-                    input  = True,
-                    layers = [
-                        layer_template(Input,   input_shape, name="input"),
-                        *enc_cnn_layer("enc_la", 1, 64,  "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 1, 64,  "$kernel_size", 1),
-                        *enc_cnn_layer("enc_la", 2, 128, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 2, 128, "$kernel_size", 2),
-                        *enc_cnn_layer("enc_la", 3, 128, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 3, 128, "$kernel_size", 2),
-                        *enc_cnn_layer("enc_la", 4, 128, "$kernel_size", 1),
-                        *enc_cnn_layer("enc_lb", 4, 128, "$kernel_size", 1),
-                        layer_template(Flatten, name="enc_cnn_flat"),
-                    ],
-                ),
-                encoder_classes = {**model_items['encoder_classes']},
-                encoder_concat  = {**model_items['encoder_concat']},
-                latent          = {**model_items['latent_lambda']},
-            ),
+            encoder_classes = {**model_items['encoder_classes']},
+            encoder_concat  = {**model_items['encoder_concat']},
+            latent          = {**model_items['latent_lambda']},
         ),
+    ),
 
-        ##############
-        # Decoder #4 #
-        ##############
-        hm4_dec = to_dict(
-            model_class = Model,
-            vars = to_dict(
-                # NOTE: may overridden via hyper params
-                ldense_dim  = 2,
-                latent_dim  = 2,
-                kernel_size = 3,
-                noise_gen   = partial(noise_gen, latent_dim=2),
-                cnn_activation = LeakyReLU,
-            ),
-            template = to_dict(
-                decoder_input = {**model_items['decoder_input']},
-                decoder_cnn = to_dict(
-                    output = True,
-                    parents = ["decoder_input"],
-                    layers = [
-                        layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
-                        layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
-                        *dec_cnn_layer("dec_la", 3, 128,    "$kernel_size", 1),
-                        *dec_cnn_layer("dec_lb", 3, 128,    "$kernel_size", 1),
-                        *dec_cnn_layer("dec_la", 2, 128,    "$kernel_size", 2),
-                        *dec_cnn_layer("dec_lb", 2, 128,    "$kernel_size", 1),
-                        *dec_cnn_layer("dec_la", 1, 64,     "$kernel_size", 2),
-                        *dec_cnn_layer("dec_lb", 1, 64,     "$kernel_size", 1),
-                        layer_template(Conv2DTranspose, 1,  "$kernel_size", padding="same", activation="sigmoid", name="output"),
-                    ],
-                ),
+    ##############
+    # Decoder #4 #
+    ##############
+    hm4_dec = to_dict(
+        model_class = Model,
+        vars = to_dict(
+            # NOTE: may overridden via hyper params
+            ldense_dim  = 2,
+            latent_dim  = 2,
+            kernel_size = 3,
+            noise_gen   = partial(noise_gen, latent_dim=2),
+            cnn_activation = LeakyReLU,
+        ),
+        template = to_dict(
+            decoder_input = {**model_items['decoder_input']},
+            decoder_cnn = to_dict(
+                output = True,
+                parents = ["decoder_input"],
+                layers = [
+                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
+                    *dec_cnn_layer("dec_la", 3, 128,    "$kernel_size", 1),
+                    *dec_cnn_layer("dec_lb", 3, 128,    "$kernel_size", 1),
+                    *dec_cnn_layer("dec_la", 2, 128,    "$kernel_size", 2),
+                    *dec_cnn_layer("dec_lb", 2, 128,    "$kernel_size", 1),
+                    *dec_cnn_layer("dec_la", 1, 64,     "$kernel_size", 2),
+                    *dec_cnn_layer("dec_lb", 1, 64,     "$kernel_size", 1),
+                    layer_template(Conv2DTranspose, 1,  "$kernel_size", padding="same", activation="sigmoid", name="output"),
+                ],
             ),
         ),
     ),
