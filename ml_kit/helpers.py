@@ -19,6 +19,9 @@ if STANDALONE:
 import copy
 import time
 import re
+import os
+import shutil
+
 
 ENV__MODEL__CREATE_AUTOIMPORT = 'ENV__MODEL__CREATE_AUTOIMPORT'
 ENV__MODEL__FALLBACK_ARGS = 'ENV__MODEL__FALLBACK_ARGS'
@@ -67,6 +70,24 @@ def mult(*values):
         result *= v
     return result
 
+
+def rmtree(path):
+    # Rewrite file and make it size zero bytes before removing
+    # Otherwise gdrive moves deleted files into trash in they are still consuming space
+    path = Path(path)
+    if path.exists():
+        if path.is_file():
+            with open(path, "w") as f:
+                pass
+            path.unlink()
+        elif path.is_dir():
+            for root, _, files in os.walk(path):
+                for fn in files:
+                    with open(Path(root)/fn, "w") as f:
+                        pass
+            shutil.rmtree(path)
+        else:
+            raise ValueError(f"Path '{path}' should point to a file or to a dir!")
 
 class timex:
     """
