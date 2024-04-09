@@ -1273,9 +1273,9 @@ class TrainHandler:
 
         if save_path.exists():
             if back_path.exists():
-                shutil.rmtree(back_path)
+                rmtree(back_path)
             shutil.copytree(save_path, back_path)
-            shutil.rmtree(save_path)
+            rmtree(save_path)
 
         os.makedirs(save_path)
         if self._mhd is not None:
@@ -1285,7 +1285,7 @@ class TrainHandler:
             pass
         if self.cleanup_backups:
             if back_path.exists():
-                shutil.rmtree(back_path)
+                rmtree(back_path)
 
     def is_saved(self, path=S_REGULAR, dont_load_model=None):
         if path == S_REGULAR:
@@ -1351,12 +1351,12 @@ class TrainHandler:
     def clear_saved_data(self):
         for path in (self._last_path, self._back_path, self._best_path, self._bbak_path):
             if path.exists():
-                shutil.rmtree(path)
+                rmtree(path)
 
     def clear_backups(self):
         for path in (self._back_path, self._bbak_path):
             if path.exists():
-                shutil.rmtree(path)
+                rmtree(path)
 
     def is_enough(self, target):
         if target is None:
