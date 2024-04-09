@@ -796,6 +796,9 @@ for prefix in ("hm1", "hm2", "hm3", "hm4"):
         mhd_kwargs = to_dict(
             load_weights_only = True
         ),
+        thd_kwargs = to_dict(
+            cleanup_backups = True
+        ),
         model_class = None,
         vars = to_dict(
             # Synchronize submodel's common vars
