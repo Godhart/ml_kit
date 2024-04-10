@@ -790,8 +790,8 @@ handmade_models_parts = to_dict(
 
 handmade_models = {}
 
-for prefix in ("hm1", "hm2", "hm3", "hm4"):
-    handmade_models[f"{prefix}_full"] = to_dict(
+for prefix in ("hm3", "hm4", "hm1", "hm2", ):
+    handmade_models[f"{prefix}"] = to_dict(
         loss = cvae_loss,
         mhd_kwargs = to_dict(
             load_weights_only = True
@@ -964,8 +964,9 @@ hp_template = to_dict(
 hyper_params_sets = {}
 
 for name, custom_vars in (
-    ("ld3", to_dict(latent_dim = 3, noise_gen = partial(noise_gen, latent_dim=3))),
-    ("ld4", to_dict(latent_dim = 4, noise_gen = partial(noise_gen, latent_dim=4))),
+    ("ld16", to_dict(latent_dim = 16, noise_gen = partial(noise_gen, latent_dim=16))),
+    ("ld03", to_dict(latent_dim = 3,  noise_gen = partial(noise_gen, latent_dim=3 ))),
+    ("ld04", to_dict(latent_dim = 4,  noise_gen = partial(noise_gen, latent_dim=4 ))),
     ("def", {}),
 ):
     hp =copy.deepcopy(hp_template)
