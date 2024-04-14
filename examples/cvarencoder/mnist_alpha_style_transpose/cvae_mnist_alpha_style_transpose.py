@@ -1,5 +1,5 @@
 # Этот пример в google_colab можно посмотреть по ссылке
-# для букв - https://colab.research.google.com/drive/1S5G9ENkY3JbzJomr8fV16EUfMdAEvz7a
+# для букв - https://colab.research.google.com/drive/1BYpocfurl9kF8I2dR4J001FGxWARahI9
 # для цифр - https://colab.research.google.com/drive/1Tbneu8h_0UjB0SiGn4ab3XEUE9o638lA
 
 # Возьмите из ноутбука по практическому занятия "Автокодировщики" сверточный вариационный энкодер или напишите свой и обучите его на датасете Emnist letters.
