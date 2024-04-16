@@ -21,6 +21,8 @@ import time
 import re
 import os
 import shutil
+import math
+import numpy as np
 
 
 ENV__MODEL__CREATE_AUTOIMPORT = 'ENV__MODEL__CREATE_AUTOIMPORT'
@@ -706,6 +708,51 @@ def model_create(model_class, templates, model_kwargs=None, **variables):
         return complex_model_create(model_class, templates, **variables)
     else:
         raise ValueError(f"Unsupported template kind: '{kind}'")
+
+
+# Равномерный проход по скрытому пространству
+def walk_over_latent_space(
+    latent_dim,
+    total_samples,
+):
+    # На сколько дробить каждое измерение
+    splits = math.pow(total_samples, 1/latent_dim)
+    if splits >= 3.:
+        splits = math.ceil(splits)
+        # Если хоть как-то можно побить
+        # 1. построить все координаты центров "кубиков" в N-мерно пространстве
+        split_step = 2. / (splits-1)
+        coord = [0]*latent_dim
+        points = []
+        while True:
+            points.append([*coord])
+            if coord == [splits-1]*latent_dim:
+                break
+            for j in range(latent_dim):
+                coord[j] += 1
+                if coord[j] < splits:
+                    break
+                coord[j] = 0
+        # 2. отобрать total_samples шт. из возможных "кубиков"
+        idx = -1
+        h = np.zeros((total_samples, latent_dim))
+        for i in np.linspace(0, len(points)-1, total_samples, endpoint=True):
+            idx += 1
+            coord = points[math.floor(i)]
+            for j in range(latent_dim):
+                h[idx, j] = -1. + split_step * coord[j]
+    else:
+        # Иначе просто диагональ
+        start = np.zeros((total_samples, latent_dim))
+        start.fill(-1.)
+        end = np.zeros((total_samples, latent_dim))
+        end.fill(1.)
+        h = np.linspace(start, end, total_samples, endpoint=True)
+
+    for i in range(h.shape[0]):
+        print(h[i,])
+
+    return h
 
 
 if STANDALONE:
