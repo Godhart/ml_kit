@@ -67,6 +67,7 @@ S_REGULAR = "regular"
 S_BACKUP = "backup"
 S_BEST = "best"
 S_COMPLETE = "complete"
+S_REPORT = "report"
 
 S_ACCURACY = "accuracy"
 S_MAE = "mae"
