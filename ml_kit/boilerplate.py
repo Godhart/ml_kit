@@ -320,8 +320,10 @@ def train_routine(
                             break
                     del thd_tmp
 
+                report_is_void = False
                 if not enough:
                 # Train if not enough
+                    report_is_void = True
                     thd.train(
                         from_scratch    = train_vars.get("from_scratch", ENV[ENV__TRAIN__DEFAULT_FROM_SCRATCH]),
                         epochs          = train_vars.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]),
@@ -359,27 +361,43 @@ def train_routine(
                 best_metrics['epoch'] = None
                 best_metrics['pred'] = None
 
-                if thd.can_load(S_BEST):
-                    thd.load_best()
-                    best_metrics['epoch'] = mhd.context.epoch
-                    mhd.update_data(force=True)
-                    best_metrics['pred'] = mhd.context.test_pred
-                elif thd.can_load(S_BEST, dont_load_model=True):
-                    thd_tmp = TrainHandler(
-                        # NOTE: used only to load data and hold best value
-                        data_path       = thd.data_path,
-                        data_name       = thd.data_name,
-                        mhd             = thd._mhd_class(
-                            name=thd.data_name,
-                            model_class=None,
-                            optimizer=None,
-                            loss=None,
-                            metrics=thd._mhd.metrics,
-                        ),
-                    )
-                    thd_tmp.load(S_BEST, dont_load_model=True)
-                    best_metrics['epoch'] = thd_tmp.mhd.context.epoch
-                    del thd_tmp
+                # TODO: put target metrics into best/last metrics to avoid referring mhd context from business logic
+
+                if not report_is_void and thd.is_saved(S_REPORT):
+                    thd.load(S_REPORT)
+                if any(data_field not in mhd.context.extra_data for data_field in (
+                        'full_history', 'best_metrics', 'last_metrics')):
+                    if thd.can_load(S_BEST):
+                        thd.load_best()
+                        best_metrics['epoch'] = mhd.context.epoch
+                        mhd.update_data(force=True)
+                        best_metrics['pred'] = mhd.context.test_pred
+                    elif thd.can_load(S_BEST, dont_load_model=True):
+                        # TODO: still need to load whole BEST as context is can be used later in reports
+                        # An Option for this?
+                        thd_tmp = TrainHandler(
+                            # NOTE: used only to load data and hold best value
+                            data_path       = thd.data_path,
+                            data_name       = thd.data_name,
+                            mhd             = thd._mhd_class(
+                                name=thd.data_name,
+                                model_class=None,
+                                optimizer=None,
+                                loss=None,
+                                metrics=thd._mhd.metrics,
+                            ),
+                        )
+                        thd_tmp.load(S_BEST, dont_load_model=True)
+                        best_metrics['epoch'] = thd_tmp.mhd.context.epoch
+                        del thd_tmp
+
+                    mhd.context.extra_data['full_history'] = full_history
+                    mhd.context.extra_data['best_metrics'] = best_metrics
+                    mhd.context.extra_data['last_metrics'] = last_metrics
+                else:
+                    full_history = mhd.context.extra_data['full_history']
+                    best_metrics = mhd.context.extra_data['best_metrics']
+                    last_metrics = mhd.context.extra_data['last_metrics']
 
                 mhd.context.report_history = full_history
 
@@ -412,6 +430,10 @@ def train_routine(
                         clear_output()
 
                 mhd.context.report_history = None
+
+                if mhd.context.extra_data.get('save_report', False) is True:
+                    thd.save(S_REPORT)
+
                 mhd.unload_model()
 
             main_logic(model_name, hp_name)
