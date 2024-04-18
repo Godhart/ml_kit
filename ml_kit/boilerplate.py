@@ -164,6 +164,7 @@ def print_to_tab_fallback(
     tab_name,
     last_metrics,
     best_metrics,
+    **kwargs,
 ):
     print(f"No print code for tabs group '{tab_group}'")
 
@@ -180,6 +181,7 @@ def print_to_tab_default(
     tab_name,
     last_metrics,
     best_metrics,
+    **kwargs,
 ):
     tab_print_map = {
         'learn' : print_to_tab_learn
@@ -198,6 +200,7 @@ def print_to_tab_default(
             tab_name,
             last_metrics,
             best_metrics,
+            **kwargs,
         )
         return
 
@@ -218,6 +221,7 @@ def print_to_tab_default(
         tab_name,
         last_metrics,
         best_metrics,
+        **kwargs,
     )
 
 
@@ -435,5 +439,252 @@ def train_routine(
                     thd.save(S_REPORT)
 
                 mhd.unload_model()
+
+            main_logic(model_name, hp_name)
+
+
+def multi_model_train_routine(
+    models,
+    hyper_params_sets,
+    tabs_dict,
+    fit_call,
+    get_tab_run_call=get_tab_run_default,
+    preparation_call=preparation_default,
+    on_model_update_call=on_model_update_default,
+    model_create_call=model_create_default,
+    trainer_create_call=trainer_create_default,
+    train_display_call=train_display_default,
+    print_to_tab_call=print_to_tab_default,
+    use_model_hp=None,
+    ):
+    dummy_output = widgets.Output()
+
+    for model_name in models:
+        for hp_name in hyper_params_sets:
+            def main_logic(model_name, hp_name):
+
+                hp_sets = copy.deepcopy(hyper_params_sets[hp_name])
+                if 'model' not in hp_sets:
+                    hp_sets['model'] = model_name
+
+                models_sets = models[model_name]
+
+                _, _, run_name = get_tab_run_call(None, model_name, models_sets, hp_name, hp_sets)
+
+                if use_model_hp is not None:
+                    if not use_model_hp(model_name, models_sets, hp_name, hp_sets, run_name):
+                        return
+
+                print(f"Running {run_name}")
+
+                def init_model(model_data, hp, suffix):
+
+                    run_name = run_name + f"-{suffix}"
+
+                    retval = to_dict(
+                        model_name = model_name,
+                        model_data = model_data,
+                        hp_name = hp_name,
+                        hp = hp,
+                        suffix = suffix,
+                        run_name = run_name,
+                    )
+
+                    model_vars = {**copy.deepcopy(model_data.get('vars', {})), **copy.deepcopy(hp.get('model_vars', {}))}
+
+                    hp['model_vars'] = model_vars
+
+                    if 'data_vars' not in hp:
+                        hp['data_vars'] = {}
+
+                    if 'train_vars' not in hp:
+                        hp['train_vars'] = {}
+                    train_vars = hp['train_vars']
+
+                    retval['data_provider'] = data_provider = preparation_call(
+                        model_name,
+                        model_data,
+                        hp_name,
+                        hp,
+                    )
+
+                    mhd, mhd_class = model_create_call(
+                        model_name,
+                        model_data,
+                        hp_name,
+                        hp,
+                        run_name,
+                        data_provider,
+                    )
+
+                    retval['mhd'], retval['mhd_class'] = mhd, mhd_class
+
+                    # TODO: chained models. How to handle create...
+
+                    thd, thd_class = trainer_create_call(
+                        model_name,
+                        model_data,
+                        hp_name,
+                        hp,
+                        run_name,
+                        mhd,
+                        mhd_class,
+                        on_model_update_call,
+                    )
+
+                    retval['thd'], retval['thd_class'] = thd, thd_class
+
+                    # Check if saved results are enough even if model is not saved
+                    retval['best_simple_avail'] = thd.can_load(S_BEST, dont_load_model=True)
+                    retval['regular_simple_avail'] = thd.can_load(S_REGULAR, dont_load_model=True)
+                    retval['enough'] = False
+                    retval['can_pred'] = True
+                    if retval['best_simple_avail'] or retval['regular_simple_avail']:
+                        thd_tmp = TrainHandler(
+                            # NOTE: used only to load and check metrics
+                            data_path       = thd.data_path,
+                            data_name       = thd.data_name,
+                            mhd             = thd._mhd_class(
+                                name=thd.data_name,
+                                model_class=None,
+                                optimizer=None,
+                                loss=None,
+                                metrics=thd._mhd.metrics,
+                            ),
+                        )
+                        for load_path in S_REGULAR, S_BEST:
+                            if not thd_tmp.can_load(load_path, dont_load_model=True):
+                                continue
+                            thd_tmp.load(load_path, dont_load_model=True)
+                            if thd_tmp.mhd.context.epoch >= train_vars.get("epochs", ENV[ENV__TRAIN__DEFAULT_EPOCHS]) \
+                            or thd.is_enough(train_vars.get("target", ENV[ENV__TRAIN__DEFAULT_TARGET])):
+                                # TODO: check this as it seems that it hadn't worked well in the colab (lesson10-lite)
+                                retval['enough'] = True
+                                break
+                        del thd_tmp
+
+                    return retval
+
+                sets_context = {}
+                for k in models_sets.keys():
+                    model_data = models_sets[k]
+                    hp = hp_sets[k]
+                    sets_context[k] = init_model(model_data, hp, k)
+
+                enough = all(v['enough'] is True for v in sets_context.values())
+
+                report_is_void = False
+                if not enough:
+                    report_is_void = True
+                    fit_call(sets_context, run_name)
+                else:
+                    # Otherwise - load in following order
+                    for k,v in sets_context.items():
+                        thd = v['thd']
+                        if thd.can_load(S_REGULAR):
+                            thd.load(S_REGULAR)
+                        elif v['regular_simple_avail']:
+                            thd.load(S_REGULAR, dont_load_model=True)
+                            v['can_pred'] = False
+                        elif thd.can_load(S_BEST):
+                            thd.load(S_BEST)
+                        else:
+                            thd.load(S_BEST, dont_load_model=True)
+                            v['can_pred'] = False
+
+                # Display train results
+                for k, v in sets_context.items():
+                    if not report_is_void and v['thd'].is_saved(S_REPORT):
+                        v['thd'].load(S_REPORT)
+                    if any(data_field not in v['mhd'].context.extra_data for data_field in (
+                            'full_history', 'best_metrics', 'last_metrics')):
+                        last_metrics = {}
+                        best_metrics = {}
+                        mhd = v['mhd']
+                        thd = v['thd']
+                        full_history = copy.deepcopy(mhd.context.history)
+
+                        last_metrics['epoch'] = mhd.context.epoch
+                        last_metrics['pred'] = None
+                        if v['can_pred']:
+                            mhd.update_data(force=True)
+                            last_metrics['pred'] = mhd.context.test_pred
+                        else:
+                            mhd.create()    # NOTE: required to print model info
+
+                        best_metrics['epoch'] = None
+                        best_metrics['pred'] = None
+
+                        # TODO: put target metrics into best/last metrics to avoid referring mhd context from business logic
+
+                        if thd.can_load(S_BEST):
+                            thd.load_best()
+                            best_metrics['epoch'] = mhd.context.epoch
+                            mhd.update_data(force=True)
+                            best_metrics['pred'] = mhd.context.test_pred
+                        elif thd.can_load(S_BEST, dont_load_model=True):
+                            # TODO: still need to load whole BEST as context is can be used later in reports
+                            # An Option for this?
+                            thd_tmp = TrainHandler(
+                                # NOTE: used only to load data and hold best value
+                                data_path       = thd.data_path,
+                                data_name       = thd.data_name,
+                                mhd             = thd._mhd_class(
+                                    name=thd.data_name,
+                                    model_class=None,
+                                    optimizer=None,
+                                    loss=None,
+                                    metrics=thd._mhd.metrics,
+                                ),
+                            )
+                            thd_tmp.load(S_BEST, dont_load_model=True)
+                            best_metrics['epoch'] = thd_tmp.mhd.context.epoch
+                            del thd_tmp
+                        mhd.context.extra_data['full_history'] = full_history
+                        mhd.context.extra_data['last_metrics'] = last_metrics
+                        mhd.context.extra_data['best_metrics'] = best_metrics
+                    else:
+                        full_history = mhd.context.extra_data['full_history']
+                        last_metrics = mhd.context.extra_data['last_metrics']
+                        best_metrics = mhd.context.extra_data['best_metrics']
+
+                    mhd.context.report_history = full_history
+
+                # Cleanup anything in buffer
+                with dummy_output:
+                    plt.show()
+                    clear_output()
+
+                for tab_id in hp['tabs']:
+                    tab_group, tab_name, _ = get_tab_run_call(tab_id, model_name, model_data, hp_name, hp)
+                    with tabs_dict[tab_group][tab_name]:
+                        clear_output()
+                        print_to_tab_call(
+                            model_name,
+                            model_data,
+                            hp_name,
+                            hp,
+                            run_name,
+                            None,
+                            None,
+                            tab_id,
+                            tab_name,
+                            None,
+                            None,
+                            sets_context,
+                        )
+
+                    # Cleanup anything that could be left in buffer
+                    with dummy_output:
+                        plt.show()
+                        clear_output()
+
+                for k, v in sets_context.items():
+                    mhd = v['mhd']
+                    thd = v['thd']
+                    mhd.context.report_history = None
+                    if mhd.context.extra_data.get('save_report', False) is True:
+                        thd.save(S_REPORT)
+                    mhd.unload_model()
 
             main_logic(model_name, hp_name)
