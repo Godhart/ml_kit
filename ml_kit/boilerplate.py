@@ -576,7 +576,7 @@ def multi_model_train_routine(
                 report_is_void = False
                 if not enough:
                     report_is_void = True
-                    fit_call(sets_context, run_name)
+                    fit_call(sets_context, run_name, train_display_call)
                 else:
                     # Otherwise - load in following order
                     for k,v in sets_context.items():
