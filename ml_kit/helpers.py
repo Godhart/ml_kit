@@ -62,6 +62,7 @@ S_VARS = 'vars'
 
 S_ARGS = 'args'
 S_KWARGS = 'kwargs'
+S_INPLACE = '_inplace_'
 
 
 def mult(*values):
@@ -266,6 +267,19 @@ def subst_vars(value, variables, recurse=False, var_sign="$", raise_error_when_n
     elif recurse or not nested:
         if isinstance(value, list):
             result = [subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found, nested=True) for v in value]
+            if result[0] == S_INPLACE:
+                if len(result) > 4 or len(result) < 2:
+                    raise ValueError(f"Length of list with '{S_INPLACE}' should be from 2 to 4!")
+                in_place_call = result[1]
+                if len(result) >= 2:
+                    in_place_args = result[2]
+                else:
+                    in_place_args = []
+                if len(result) >= 3:
+                    in_place_kwargs = result[3]
+                else:
+                    in_place_kwargs = {}
+                result = in_place_call(*in_place_args, **in_place_kwargs)
         elif isinstance(value, tuple):
             result = (subst_vars(v, variables, recurse, var_sign, raise_error_when_not_found, nested=True) for v in value)
         elif isinstance(value, dict):
