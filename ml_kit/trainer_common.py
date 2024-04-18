@@ -551,6 +551,7 @@ class ModelContext:
         self.report_history = None
         self.test_pred      = test_pred
         self.eval_data      = eval_data
+        self.extra_data     = {}
 
     @property
     def metrics(self):
