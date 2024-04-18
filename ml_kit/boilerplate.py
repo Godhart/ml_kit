@@ -566,8 +566,10 @@ def multi_model_train_routine(
                     return retval
 
                 sets_context = {}
-                for k in models_sets.keys():
-                    model_data = models_sets[k]
+                if models_sets.get(S_KIND, None) != S_MODEL_SET:
+                    raise ValueError("Not a model set provided!")
+                for k in models_sets[S_MODEL_SET].keys():
+                    model_data = models_sets[S_MODEL_SET][k]
                     hp = hp_sets[k]
                     sets_context[k] = init_model(model_data, hp, k)
 
