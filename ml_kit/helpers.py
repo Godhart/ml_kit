@@ -65,7 +65,7 @@ S_KWARGS = 'kwargs'
 S_INPLACE = '_inplace_'
 
 
-def mult(*values):
+def prod(*values):
     if len(values) == 1 and isinstance(values, (list, tuple)):
         values = values[0]
     result = 1
