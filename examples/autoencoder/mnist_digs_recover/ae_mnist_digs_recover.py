@@ -177,7 +177,7 @@ from tensorflow.keras.layers import concatenate, Input, Dense, Dropout, BatchNor
 ###
 # Ешё немного служебных функций
 
-def mult(*args):
+def prod(*args):
     result = 1
     for v in args:
         result *= v

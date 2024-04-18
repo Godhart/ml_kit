@@ -302,7 +302,7 @@ original_classes = np.array([
     [200, 200, 200],
 ])
 
-y_train_flat = y_train.reshape(mult(y_train.shape[:-1]), y_train.shape[-1])
+y_train_flat = y_train.reshape(prod(y_train.shape[:-1]), y_train.shape[-1])
 
 if RELOAD_DATA is True or original_classes is None:
     original_classes = np.unique(y_train_flat, axis=0)

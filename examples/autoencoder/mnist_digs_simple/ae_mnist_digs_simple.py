@@ -240,7 +240,7 @@ from tensorflow.keras.layers import concatenate, Input, Dense, Dropout, BatchNor
 ###
 # Ешё немного служебных функций
 
-def mult(*args):
+def prod(*args):
     result = 1
     for v in args:
         result *= v
@@ -279,7 +279,7 @@ model_items = to_dict(
                     layer_template(Flatten, ),
     ],
     dns_output = [
-                    layer_template(Dense,   mult(*input_shape), activation='sigmoid'),
+                    layer_template(Dense,   prod(*input_shape), activation='sigmoid'),
                     layer_template(Reshape, input_shape),
     ],
     cnn1_encoder = [
@@ -634,7 +634,7 @@ def prepare(    model_name,
             model_vars['latent_expand_size'] = latent_expand_size[model_vars.get('latent', 'native')]
         else:
             model_vars['latent_expand_size'] = latent_ref
-        model_vars['latent_expand_size_flat'] = mult(*model_vars['latent_expand_size'])
+        model_vars['latent_expand_size_flat'] = prod(*model_vars['latent_expand_size'])
 
     data_provider = TrainDataProvider(
         x_train = x_train,

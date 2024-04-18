@@ -265,7 +265,7 @@ def cvae_loss(mhd):
     outputs     = mhd.data["ae"][S_MODEL]
 
     reconstruction_loss = keras.losses.MSE(input_img, outputs)      # Рассчитаем ошибку восстановления изображения - лоссы MSE
-    reconstruction_loss *= mult(x_train.shape[1:])                  # Уберем нормировку MSE
+    reconstruction_loss *= prod(x_train.shape[1:])                  # Уберем нормировку MSE
     kl_loss = 1 + z_log_var - K.square(z_mean) - K.exp(z_log_var)   # Рассчитаем лоссы KL
     kl_loss = -0.5* K.sum(kl_loss, axis=-1)                         #
     result = K.mean(reconstruction_loss) +  K.mean(kl_loss)         # Суммируем лоссы - здесь можно вводить веса
@@ -525,7 +525,7 @@ handmade_models_parts = to_dict(
                 output = True,
                 parents = ["decoder_input"],
                 layers = [
-                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Dense,   prod(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
                     layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
                     *dec_cnn_layer("dec_l", 3, 64,      "$kernel_size", 1),
                     *dec_cnn_layer("dec_l", 2, 64,      "$kernel_size", 2),
@@ -583,7 +583,7 @@ handmade_models_parts = to_dict(
                 output = True,
                 parents = ["decoder_input"],
                 layers = [
-                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Dense,   prod(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
                     layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
                     layer_template(Conv2DTranspose,64,  "$kernel_size", strides=2, padding="same", activation="$cnn_act",   name="dec_l2_cnn"),
                     layer_template(Conv2DTranspose,32,  "$kernel_size", strides=2, padding="same", activation="$cnn_act",   name="dec_l1_cnn"),
@@ -647,7 +647,7 @@ handmade_models_parts = to_dict(
                 output = True,
                 parents = ["decoder_input"],
                 layers = [
-                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Dense,   prod(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
                     layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
                     *dec_cnn_layer("dec_la", 3, 64,     "$kernel_size", 1),
                     *dec_cnn_layer("dec_lb", 3, 64,     "$kernel_size", 1),
@@ -715,7 +715,7 @@ handmade_models_parts = to_dict(
                 output = True,
                 parents = ["decoder_input"],
                 layers = [
-                    layer_template(Dense,   mult(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
+                    layer_template(Dense,   prod(7, 7, 64), name="dec_input_expand"),   # TODO: Activation?
                     layer_template(Reshape,     (7, 7, 64), name="dec_input_reshape"),
                     *dec_cnn_layer("dec_la", 3, 128,    "$kernel_size", 1),
                     *dec_cnn_layer("dec_lb", 3, 128,    "$kernel_size", 1),
