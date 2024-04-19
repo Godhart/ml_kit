@@ -1264,6 +1264,10 @@ class MultiModelHandler():
                 result[f"{k}-{kk}"] = vv
         return result
 
+    @property
+    def model_handlers(self):
+        return {**self._model_handlers}
+
     def create(self):
         for k,v in self._model_handlers.items():
             v.create()
