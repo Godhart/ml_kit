@@ -770,6 +770,13 @@ def walk_over_latent_space(
     return h
 
 
+def create_multiple_instances(instance_class, default_kwargs:dict, instances_kwargs:dict):
+    result = {}
+    for k,v in instances_kwargs.items():
+        result[k] = instance_class(**{**default_kwargs, **v})
+    return result
+
+
 if STANDALONE:
     if __name__ == "__main__":
         # Test Cases:
