@@ -42,6 +42,7 @@ S_LAYER = 'layer'
 S_LAYERS = 'layers'
 S_MAKE_INSTANCE = 'make_instance'
 S_MODEL = 'model'
+S_MODEL_SET = 'model_set'
 S_MODEL_CLASS = 'model_class'
 S_MODEL_TEMPLATE = 'model_template'
 S_NAME = "name"
