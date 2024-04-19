@@ -1202,6 +1202,115 @@ class ClassClassifierHandler(ModelHandler):
             self._context._eval_data[S_ACCURACY] = self._context.cm.diagonal().mean()
 
 
+class MultiModelHandler():
+    """
+    ModelHandler-like (a bit like) class to handle multiple connected networks
+    Takes a dict of pre-created model handlers as input
+    """
+
+    _context_class = ModelContext
+
+    def __init__(
+        self,
+        name            : str,
+        models_handlers : dict,
+        fit_call,
+        predict_call,
+        batch_size      : int  | None = 10,
+        data_provider   : TrainDataProvider = None,
+        save_model          = None,
+        save_weights        = None,
+        load_weights_only   : bool = False,
+    ):
+        self._context = self._context_class(
+            name            = name,
+            model_class     = None,
+            optimizer       = None,
+            loss            = None,
+            metrics         = None,
+            inputs_order    = None,
+        )
+        self._model_handlers = models_handlers
+        self._fit_call       = fit_call
+        self._predict_call   = predict_call
+        self.batch_size      = batch_size
+        self.data_provider   = data_provider
+
+    @property
+    def context(self):
+        return self._context
+
+    @property
+    def name(self):
+        return self._context.name
+
+    @name.setter
+    def name(self, value):
+        self._context.name = value
+
+    @property
+    def metrics(self):
+        result = {}
+        for k, v in self._model_handlers.items():
+            for kk, vv in v.metrics:
+                result[f"{k}-{kk}"] = vv
+        return result
+
+    @property
+    def history(self):
+        result = {}
+        for k, v in self._model_handlers.items():
+            for kk, vv in v.history:
+                result[f"{k}-{kk}"] = vv
+        return result
+
+    def create(self):
+        for k,v in self._model_handlers.items():
+            v.create()
+
+    def fit(self, epochs, initial_epoch=None, kwargs=None):
+        self._fit_call(self, epochs, initial_epoch, kwargs)
+        return self.history
+
+    def predict(self, data):
+        return self._predict_call(data)
+
+    def save(self, path):
+        print(f"Saving model state to '{path}'")
+        with open(path / "context.pickle", "wb") as f:
+            pickle.dump(self._context, f)
+        for k,v in self._model_handlers.items():
+            v.save(path+f"-{k}")
+
+    def is_model_saved(self, path):
+        return all(v.is_model_saved(path+f"-{k}") for k,v in self._model_handlers.items())
+
+    def is_weights_saved(self, path):
+        return all(v.is_weights_saved(path+f"-{k}") for k,v in self._model_handlers.items())
+
+    def can_load(self, path, dont_load_model=None, load_weights=None):
+        return all(v.can_load(path+f"-{k}", dont_load_model, load_weights) for k,v in self._model_handlers.items())
+
+    def load(self, path, dont_load_model=None, load_weights=None):
+        for k,v in self._model_handlers.items():
+            v.load(path+f"-{k}", dont_load_model, load_weights)
+        print(f"Loading model state from '{path}'")
+        with open(path / "context.pickle", "rb") as f:
+            self._context = pickle.load(f)
+
+    def load_weights(self, path):
+        for k,v in self._model_handlers.items():
+            v.load_weights(path+f"-{k}")
+
+    def update_data(self, force=False):
+        for k,v in self._model_handlers.items():
+            v.update_data(force)
+
+    def unload_model(self):
+        for k,v in self._model_handlers.items():
+            v.unload_model()
+
+
 class TrainHandler:
     """
     Provides unified and simple way to handle models training and saving/loading training checkpoints
