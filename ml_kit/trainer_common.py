@@ -1569,6 +1569,7 @@ class TrainHandler:
                 fit_kwargs = {}
                 if self.fit_callbacks is not None:
                     fit_kwargs['callbacks'] = self.fit_callbacks
+
                 self.mhd.fit(epochs=train_step, initial_epoch=initial_epoch, kwargs=fit_kwargs)
                 # NOTE: fit() would affect .epoch, and other metrics fields
 
