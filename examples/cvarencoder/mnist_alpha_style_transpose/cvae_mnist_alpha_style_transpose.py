@@ -1316,7 +1316,7 @@ bp.train_routine(
     get_tab_run_call=get_tab_run,
     print_to_tab_call=print_to_tab,
     on_model_update_call=on_model_update,
-    use_model_hp=use_model_hp,
+    use_model_hp_call=use_model_hp,
 )
 
 score_table = dict_to_table(score, dict_key='model', sort_key=lambda x: [
