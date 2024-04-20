@@ -841,9 +841,9 @@ class ModelHandler():
     def __init__(
         self,
         name            : str,
-        model_class,
-        optimizer,
-        loss,
+        model_class     = None,
+        optimizer       = None,
+        loss            = None,
         metrics         : list | None = None,
         model_template  : list | dict = None,
         model_variables : dict | None = None,
@@ -1144,9 +1144,9 @@ class ClassClassifierHandler(ModelHandler):
     def __init__(
         self,
         name            : str,
-        model_class,
-        optimizer,
-        loss,
+        model_class     = None,
+        optimizer       = None,
+        loss            = None,
         metrics         : list | None = None,
         model_template  : list = None,
         model_variables : dict | None = None,
@@ -1439,9 +1439,6 @@ class TrainHandler:
         if self._mhd is None:
             self._mhd = self._mhd_class(
                 name = self.data_name,
-                model_class = None,
-                optimizer = None,
-                loss = None,
             )
         self._mhd.load(load_path, dont_load_model=dont_load_model)
 
@@ -1512,10 +1509,6 @@ class TrainHandler:
             data_name       = self.data_name,
             mhd             = self._mhd_class(
                 name=self.data_name,
-                model_class=None,
-                optimizer=None,
-                loss=None,
-                metrics=self._mhd.metrics,
             ),
         )
 
