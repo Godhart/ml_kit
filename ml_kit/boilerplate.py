@@ -80,6 +80,7 @@ def model_create_default(
     hp,
     run_name,
     data_provider,
+    dummy=False,
 ):
     mhd_kwargs = model_data.get('mhd_kwargs', {})
     model_vars = hp['model_vars']
@@ -302,17 +303,20 @@ def train_routine(
                 enough = False
                 can_pred = True
                 if best_simple_avail or regular_simple_avail:
+                    mhd_tmp = model_create_call(
+                        model_name,
+                        model_data,
+                        hp_name,
+                        hp,
+                        run_name,
+                        data_provider,
+                        dummy=True
+                    )
                     thd_tmp = TrainHandler(
                         # NOTE: used only to load and check metrics
                         data_path       = thd.data_path,
                         data_name       = thd.data_name,
-                        mhd             = thd._mhd_class(
-                            name=thd.data_name,
-                            model_class=None,
-                            optimizer=None,
-                            loss=None,
-                            metrics=thd._mhd.metrics,
-                        ),
+                        mhd             = mhd_tmp,
                     )
                     for load_path in S_REGULAR, S_BEST:
                         if not thd_tmp.can_load(load_path, dont_load_model=True):
@@ -379,17 +383,20 @@ def train_routine(
                     elif thd.can_load(S_BEST, dont_load_model=True):
                         # TODO: still need to load whole BEST as context is can be used later in reports
                         # An Option for this?
+                        mhd_tmp = model_create_call(
+                            model_name,
+                            model_data,
+                            hp_name,
+                            hp,
+                            run_name,
+                            data_provider,
+                            dummy=True
+                        )
                         thd_tmp = TrainHandler(
                             # NOTE: used only to load data and hold best value
                             data_path       = thd.data_path,
                             data_name       = thd.data_name,
-                            mhd             = thd._mhd_class(
-                                name=thd.data_name,
-                                model_class=None,
-                                optimizer=None,
-                                loss=None,
-                                metrics=thd._mhd.metrics,
-                            ),
+                            mhd             = mhd_tmp,
                         )
                         thd_tmp.load(S_BEST, dont_load_model=True)
                         best_metrics['epoch'] = thd_tmp.mhd.context.epoch
