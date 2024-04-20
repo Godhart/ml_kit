@@ -852,6 +852,7 @@ class ModelHandler():
         save_model          = None,
         save_weights        = None,
         load_weights_only   : bool = False,
+        compile_on_create   = True,
     ):
         if metrics is None:
             metrics = [S_ACCURACY]
@@ -885,6 +886,7 @@ class ModelHandler():
                 self.save_weights = True
             else:
                 self.save_weights = False
+        self.compile_on_create = compile_on_create
 
     @property
     def context(self):
@@ -1002,30 +1004,31 @@ class ModelHandler():
         self._data                  = mc[S_DATA]            # NOTE: _data           isn't  restored on model load! if data is required - use load weights instead
         # TODO: named layers / inputs / outputs and other references may be recovered by from layers name
 
-        compile_kwargs = {}
+        if self.self.compile_on_create:
+            compile_kwargs = {}
 
-        if isinstance(self.context.optimizer, (list, tuple)):
-            compile_kwargs['optimizer'] = self.context.optimizer[0](*self.context.optimizer[1], **self.context.optimizer[2])
-        elif callable(self.context.optimizer):
-            compile_kwargs['optimizer'] = self.context.optimizer()
-        else:
-            compile_kwargs['optimizer'] = self.context.optimizer
+            if isinstance(self.context.optimizer, (list, tuple)):
+                compile_kwargs['optimizer'] = self.context.optimizer[0](*self.context.optimizer[1], **self.context.optimizer[2])
+            elif callable(self.context.optimizer):
+                compile_kwargs['optimizer'] = self.context.optimizer()
+            elif self.context.optimizer is not None:
+                compile_kwargs['optimizer'] = self.context.optimizer
 
-        if callable(self.context.loss):
-            losses = self.context.loss(self)
-            if not isinstance(losses, (tuple, list)):
-                losses = [losses]
-            for loss in losses:
-                self._model.add_loss(loss)
-        else:
-            compile_kwargs['loss'] = self.context.loss
+            if callable(self.context.loss):
+                losses = self.context.loss(self)
+                if not isinstance(losses, (tuple, list)):
+                    losses = [losses]
+                for loss in losses:
+                    self._model.add_loss(loss)
+            elif self.context.loss is not None:
+                compile_kwargs['loss'] = self.context.loss
 
-        if len(self.context.metrics) > 0:
-            compile_kwargs['metrics'] = get_metrics(self.context.metrics)
+            if self.context.metrics is not None and len(self.context.metrics) > 0:
+                compile_kwargs['metrics'] = get_metrics(self.context.metrics)
 
-        self._model.compile(
-            **compile_kwargs,
-        )
+            self._model.compile(
+                **compile_kwargs,
+            )
 
     def fit(self, epochs, initial_epoch=None, kwargs=None):
         if kwargs is None:
