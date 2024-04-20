@@ -51,6 +51,36 @@ def make_tabs(models, hyper_params_sets, get_tab_run_call=get_tab_run_default,):
     return tabs_dict, tabs_objs
 
 
+def get_run_data_default(
+    model_name,
+    model_data,
+    hp_name,
+    hp,
+    get_tab_run_call,
+    use_model_hp_call=None,
+):
+    if 'model' not in hp:
+        hp['model'] = model_name
+
+    _, _, run_name = get_tab_run_call(None, model_name, model_data, hp_name, hp)
+
+    if use_model_hp_call is not None:
+        if not use_model_hp_call(model_name, model_data, hp_name, hp, run_name):
+            return
+
+    model_vars = {**copy.deepcopy(model_data.get('vars', {})), **copy.deepcopy(hp.get('model_vars', {}))}
+
+    hp['model_vars'] = model_vars
+
+    if 'data_vars' not in hp:
+        hp['data_vars'] = {}
+
+    if 'train_vars' not in hp:
+        hp['train_vars'] = {}
+
+    return to_dict(run_name=run_name,)
+
+
 def preparation_default(
     model_name,
     model_data,
@@ -231,13 +261,14 @@ def train_routine(
     hyper_params_sets,
     tabs_dict,
     get_tab_run_call=get_tab_run_default,
+    get_run_data_call=get_run_data_default,
     preparation_call=preparation_default,
     on_model_update_call=on_model_update_default,
     model_create_call=model_create_default,
     trainer_create_call=trainer_create_default,
     train_display_call=train_display_default,
     print_to_tab_call=print_to_tab_default,
-    use_model_hp=None,
+    use_model_hp_call=None,
     ):
     dummy_output = widgets.Output()
 
@@ -246,28 +277,23 @@ def train_routine(
             def main_logic(model_name, hp_name):
 
                 hp = copy.deepcopy(hyper_params_sets[hp_name])
-                if 'model' not in hp:
-                    hp['model'] = model_name
+                model_data = copy.deepcopy(models[model_name])
 
-                model_data = models[model_name]
+                run_data = get_run_data_call(
+                    model_name,
+                    model_data,
+                    hp_name,
+                    hp,
+                    get_tab_run_call,
+                    use_model_hp_call,
+                )
+                if run_data is None:
+                    return
 
-                _, _, run_name = get_tab_run_call(None, model_name, model_data, hp_name, hp)
-
-                if use_model_hp is not None:
-                    if not use_model_hp(model_name, model_data, hp_name, hp, run_name):
-                        return
+                run_name = run_data['run_name']
 
                 print(f"Running {run_name}")
 
-                model_vars = {**copy.deepcopy(model_data.get('vars', {})), **copy.deepcopy(hp.get('model_vars', {}))}
-
-                hp['model_vars'] = model_vars
-
-                if 'data_vars' not in hp:
-                    hp['data_vars'] = {}
-
-                if 'train_vars' not in hp:
-                    hp['train_vars'] = {}
                 train_vars = hp['train_vars']
 
                 data_provider = preparation_call(
