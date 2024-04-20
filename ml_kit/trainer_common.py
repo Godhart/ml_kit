@@ -1216,28 +1216,23 @@ class MultiModelHandler():
     def __init__(
         self,
         name            : str,
-        models_handlers : dict,
-        fit_call,
-        predict_call,
-        batch_size      : int  | None = 10,
-        data_provider   : TrainDataProvider = None,
-        save_model          = None,
-        save_weights        = None,
-        load_weights_only   : bool = False,
+        metrics         : list | None = None,
+        models_handlers : dict[str:ModelHandler] = None,
+        fit_call        = None,
+        predict_call    = None,
     ):
         self._context = self._context_class(
             name            = name,
             model_class     = None,
             optimizer       = None,
             loss            = None,
-            metrics         = None,
+            metrics         = metrics,
             inputs_order    = None,
         )
         self._model_handlers = models_handlers
         self._fit_call       = fit_call
         self._predict_call   = predict_call
-        self.batch_size      = batch_size
-        self.data_provider   = data_provider
+        self.metrics         = metrics
 
     @property
     def context(self):
@@ -1254,33 +1249,66 @@ class MultiModelHandler():
     @property
     def metrics(self):
         result = {}
-        for k, v in self._model_handlers.items():
-            for kk, vv in v.metrics:
-                result[f"{k}-{kk}"] = vv
+        for mhn, mhi in self._model_handlers.items():
+            for kk, vv in mhi.metrics.items():
+                result[f"{mhn}-{kk}"] = vv
         return result
+
+    @metrics.setter
+    def metrics(self, value):
+        value = value or {}
+        for mhn, mhi in self._model_handlers.items():
+            mhi_metrics = []
+            for v in value:
+                if v[:len(mhn)+1] != f"{mhn}-":
+                    continue
+                mhi_metrics.append(v[len(mhn)+1:])
+            mhi.metrics = mhi_metrics
+        self._context.metrics = value
 
     @property
     def history(self):
-        result = {}
-        for k, v in self._model_handlers.items():
-            for kk, vv in v.history:
-                result[f"{k}-{kk}"] = vv
-        return result
+        return self._context.history
+
+    @history.setter
+    def history(self, value):
+        if value is None:
+            self._context.history = None
+            return
+        if self._context.history is None:
+            self._context.history = {}
+            for k in value:
+                self._context.history[k] = [] + value[k]
+        else:
+            for k in self._context.history:
+                self._context.history[k] += value[k]
 
     @property
     def model_handlers(self):
         return {**self._model_handlers}
+
+    @property
+    def model_handlers_history(self):
+        result = {}
+        for mhn, mhi in self._model_handlers.items():
+            for kk, vv in mhi.history:
+                result[f"{mhn}-{kk}"] = vv
+        return result
 
     def create(self):
         for k,v in self._model_handlers.items():
             v.create()
 
     def fit(self, epochs, initial_epoch=None, kwargs=None):
-        self._fit_call(self, epochs, initial_epoch, kwargs)
+        self.history = self._fit_call(self, epochs, initial_epoch, kwargs).history
+        self._context.test_pred = None
+        self._context.eval_data = None
+        return self.history
+
         return self.history
 
     def predict(self, data):
-        return self._predict_call(data)
+        return self._predict_call(self, data)
 
     def save(self, path):
         print(f"Saving model state to '{path}'")
